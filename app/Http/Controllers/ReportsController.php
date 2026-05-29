@@ -15,45 +15,118 @@ class ReportsController extends Controller
 {
     public function index()
     {
-        return Inertia::render('Reports/Index', [
-            'clients' => Client::with('zone', 'clientType')->get(),
-            'staff' => Staff::with('user', 'zone')->get(),
-            'months' => $this->getLast12Months(),
-        ]);
+        try {
+            return Inertia::render('Reports/Index', [
+                'clients' => Client::with('zone', 'clientType')
+                    ->get()
+                    ->map(function ($client) {
+                        return [
+                            'id' => $client->id,
+                            'name' => $client->name,
+                            'code' => $client->code,
+                            'zone' => $client->zone?->name,
+                            'type' => $client->clientType?->name,
+                            'status' => $client->status,
+                        ];
+                    }),
+                'staff' => Staff::with('user', 'zone')
+                    ->get()
+                    ->map(function ($staff) {
+                        return [
+                            'id' => $staff->id,
+                            'name' => $staff->user?->name,
+                            'phone' => $staff->phone,
+                            'zone' => $staff->zone?->name,
+                            'role' => $staff->role,
+                            'status' => $staff->is_active,
+                        ];
+                    }),
+                'months' => $this->getLast12Months(),
+                'zones' => \App\Models\Zone::all()->map(function ($zone) {
+                    return [
+                        'id' => $zone->id,
+                        'name' => $zone->name,
+                    ];
+                }),
+            ]);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to load reports data: ' . $e->getMessage());
+        }
     }
 
     public function generate(Request $request)
     {
-        $type = $request->input('type');
-        $month = $request->input('month', now()->month);
-        $year = $request->input('year', now()->year);
+        try {
+            $type = $request->input('type');
+            $month = $request->input('month', now()->month);
+            $year = $request->input('year', now()->year);
 
-        $data = match($type) {
-            'collector_performance' => Staff::with('user', 'zone')
-                ->where('role', 'collector')
-                ->get()
-                ->map(fn($staff) => [
-                    'staff' => $staff,
-                    'stats' => app(ReportService::class)->collectorPerformance($staff->id, $month, $year),
-                ]),
-            'monthly_company' => [app(ReportService::class)->monthlyCompany($month, $year)],
-            'client_summary' => Client::with('zone', 'clientType')
-                ->with(['invoices' => fn($q) => $q->where('billing_month', $month)->where('billing_year', $year)])
-                ->with(['payments' => fn($q) => $q->whereMonth('paid_at', $month)->whereYear('paid_at', $year)])
-                ->get(),
-            'expense_report' => Expense::with('category', 'staff')
-                ->whereMonth('expense_date', $month)
-                ->whereYear('expense_date', $year)
-                ->get(),
-            default => [],
-        };
+            $data = match($type) {
+                'revenue' => [
+                    'totalRevenue' => Payment::whereMonth('paid_at', $month)
+                        ->whereYear('paid_at', $year)
+                        ->sum('amount') ?? 0,
+                    'invoiceRevenue' => Invoice::where('billing_month', $month)
+                        ->where('billing_year', $year)
+                        ->sum('amount') ?? 0,
+                    'collectionRevenue' => CollectionSession::whereMonth('session_date', $month)
+                        ->whereYear('session_date', $year)
+                        ->sum('actual_amount') ?? 0,
+                ],
+                'collection' => [
+                    'totalSessions' => CollectionSession::whereMonth('session_date', $month)
+                        ->whereYear('session_date', $year)
+                        ->count() ?? 0,
+                    'totalCollected' => CollectionSession::whereMonth('session_date', $month)
+                        ->whereYear('session_date', $year)
+                        ->sum('actual_amount') ?? 0,
+                    'totalPlanned' => CollectionSession::whereMonth('session_date', $month)
+                        ->whereYear('session_date', $year)
+                        ->sum('planned_amount') ?? 0,
+                    'byZone' => \App\Models\Zone::all()->map(function ($zone) use ($month, $year) {
+                        return [
+                            'zone' => $zone->name,
+                            'collected' => CollectionSession::whereMonth('session_date', $month)
+                                ->whereYear('session_date', $year)
+                                ->whereHas('staff', fn($q) => $q->where('zone_id', $zone->id))
+                                ->sum('actual_amount') ?? 0,
+                        ];
+                    }),
+                ],
+                'staff' => Staff::with('user', 'zone')
+                    ->where('role', 'collector')
+                    ->get()
+                    ->map(function ($staff) use ($month, $year) {
+                        return [
+                            'name' => $staff->user?->name ?? 'Unknown',
+                            'zone' => $staff->zone?->name ?? 'Unassigned',
+                            'collections' => CollectionSession::where('staff_id', $staff->id)
+                                ->whereMonth('session_date', $month)
+                                ->whereYear('session_date', $year)
+                                ->sum('actual_amount') ?? 0,
+                            'sessions' => CollectionSession::where('staff_id', $staff->id)
+                                ->whereMonth('session_date', $month)
+                                ->whereYear('session_date', $year)
+                                ->count() ?? 0,
+                        ];
+                    }),
+                'financial' => [
+                    'totalExpenses' => Expense::whereMonth('expense_date', $month)
+                        ->whereYear('expense_date', $year)
+                        ->sum('amount') ?? 0,
+                    ],
+                default => [],
+            };
 
-        return Inertia::render('Reports/Show', [
-            'type' => $type,
-            'month' => $month,
-            'year' => $year,
-            'data' => $data,
-        ]);
+            return Inertia::render('Reports/Index', [
+                'reportData' => $data,
+                'selectedReportType' => $type,
+                'month' => $month,
+                'year' => $year,
+            ]);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to generate report: ' . $e->getMessage());
+        }
     }
 
     private function getLast12Months(): array

@@ -10,34 +10,34 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Expenses (This Month)</div>
-          <div class="summary-value">{{ formatCurrency(2450000) }}</div>
-          <div class="summary-change summary-change--negative">+8.3% vs last month</div>
+          <div class="summary-value">{{ formatCurrency(totalExpenses) }}</div>
+          <div class="summary-change summary-change--negative">{{ categories.length }} categories</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Pending Approval</div>
-          <div class="summary-value">{{ formatCurrency(320000) }}</div>
-          <div class="summary-change summary-change--neutral">5 expenses awaiting approval</div>
+          <div class="summary-value">{{ formatCurrency(pendingExpenses) }}</div>
+          <div class="summary-change summary-change--neutral">{{ pendingCount }} expenses awaiting approval</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Budget Used</div>
-          <div class="summary-value">67.2%</div>
-          <div class="summary-change summary-change--neutral">of {{ formatCurrency(3650000) }} monthly budget</div>
+          <div class="summary-value">{{ budgetUsedPercentage }}%</div>
+          <div class="summary-change summary-change--neutral">of {{ formatCurrency(totalBudget) }} monthly budget</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Categories</div>
-          <div class="summary-value">8 Active</div>
-          <div class="summary-change summary-change--positive">Fuel, Maintenance, Salaries, etc.</div>
+          <div class="summary-value">{{ categories.length }} Active</div>
+          <div class="summary-change summary-change--positive">{{ categories.map(c => c.name).join(', ') }}</div>
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div class="actions-bar">
-        <button class="action-btn action-btn--primary">
+        <Link :href="route('expenses.create')" class="action-btn action-btn--primary">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
           </svg>
           New Expense
-        </button>
+        </Link>
         <button class="action-btn">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -56,52 +56,16 @@
       <div class="categories-section">
         <h3>Expense by Category</h3>
         <div class="categories-grid">
-          <div class="category-card">
+          <div v-for="category in categories" :key="category.id" class="category-card">
             <div class="category-icon category-icon--fuel">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
               </svg>
             </div>
-            <div class="category-name">Fuel</div>
-            <div class="category-amount">{{ formatCurrency(850000) }}</div>
+            <div class="category-name">{{ category.name }}</div>
+            <div class="category-amount">{{ formatCurrency(category.spent) }}</div>
             <div class="category-bar">
-              <div class="category-progress" style="width: 35%"></div>
-            </div>
-          </div>
-          <div class="category-card">
-            <div class="category-icon category-icon--maintenance">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z"/>
-              </svg>
-            </div>
-            <div class="category-name">Vehicle Maintenance</div>
-            <div class="category-amount">{{ formatCurrency(420000) }}</div>
-            <div class="category-bar">
-              <div class="category-progress" style="width: 17%"></div>
-            </div>
-          </div>
-          <div class="category-card">
-            <div class="category-icon category-icon--salaries">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
-              </svg>
-            </div>
-            <div class="category-name">Staff Salaries</div>
-            <div class="category-amount">{{ formatCurrency(980000) }}</div>
-            <div class="category-bar">
-              <div class="category-progress" style="width: 40%"></div>
-            </div>
-          </div>
-          <div class="category-card">
-            <div class="category-icon category-icon--office">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0-3h.008v.008h-.008v-.008zm0-3h.008v.008h-.008v-.008z"/>
-              </svg>
-            </div>
-            <div class="category-name">Office Supplies</div>
-            <div class="category-amount">{{ formatCurrency(200000) }}</div>
-            <div class="category-bar">
-              <div class="category-progress" style="width: 8%"></div>
+              <div class="category-progress" :style="{ width: ((category.spent / category.budget) * 100) + '%' }"></div>
             </div>
           </div>
         </div>
@@ -165,7 +129,43 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+
+const props = defineProps({
+  categories: {
+    type: Array,
+    default: () => []
+  },
+  recentExpenses: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const totalExpenses = computed(() => {
+  return props.categories.reduce((sum, cat) => sum + (cat.spent || 0), 0)
+})
+
+const totalBudget = computed(() => {
+  return props.categories.reduce((sum, cat) => sum + (cat.budget || 0), 0)
+})
+
+const budgetUsedPercentage = computed(() => {
+  if (totalBudget.value === 0) return 0
+  return ((totalExpenses.value / totalBudget.value) * 100).toFixed(1)
+})
+
+const pendingExpenses = computed(() => {
+  return props.recentExpenses
+    .filter(exp => exp.status === 'pending')
+    .reduce((sum, exp) => sum + (exp.amount || 0), 0)
+})
+
+const pendingCount = computed(() => {
+  return props.recentExpenses.filter(exp => exp.status === 'pending').length
+})
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('sw-TZ', {
@@ -176,6 +176,7 @@ const formatCurrency = (value) => {
 }
 
 const formatDate = (date) => {
+  if (!date) return 'N/A'
   return new Date(date).toLocaleDateString('en-TZ', {
     year: 'numeric',
     month: 'short',

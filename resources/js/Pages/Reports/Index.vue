@@ -50,22 +50,15 @@
       <div class="filters-section">
         <div class="filter-group">
           <label class="filter-label">Period</label>
-          <select class="filter-select">
-            <option>This Month</option>
-            <option>Last Month</option>
-            <option>Last 3 Months</option>
-            <option>Last 6 Months</option>
-            <option>This Year</option>
-            <option>Custom Range</option>
+          <select v-model="selectedMonth" class="filter-select">
+            <option v-for="m in months" :key="m.value" :value="m.value">{{ m.label }}</option>
           </select>
         </div>
         <div class="filter-group">
           <label class="filter-label">Zone</label>
           <select class="filter-select">
-            <option>All Zones</option>
-            <option>Zone A-F</option>
-            <option>Zone G-J</option>
-            <option>Zone K-L</option>
+            <option value="">All Zones</option>
+            <option v-for="z in zones" :key="z.id" :value="z.id">{{ z.name }}</option>
           </select>
         </div>
         <div class="filter-group">
@@ -76,7 +69,7 @@
             <option>CSV</option>
           </select>
         </div>
-        <button class="generate-btn">
+        <button class="generate-btn" @click="generateReport">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
           </svg>
@@ -241,16 +234,71 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
-const selectedReportType = ref('revenue')
+const props = defineProps({
+  clients: {
+    type: Array,
+    default: () => []
+  },
+  staff: {
+    type: Array,
+    default: () => []
+  },
+  months: {
+    type: Array,
+    default: () => []
+  },
+  zones: {
+    type: Array,
+    default: () => []
+  },
+  reportData: {
+    type: Object,
+    default: () => ({})
+  },
+  selectedReportType: {
+    type: String,
+    default: 'revenue'
+  },
+  month: {
+    type: Number,
+    default: null
+  },
+  year: {
+    type: Number,
+    default: null
+  }
+})
+
+const selectedReportType = ref(props.selectedReportType || 'revenue')
+const selectedMonth = ref(props.month || new Date().getMonth() + 1)
+const selectedYear = ref(props.year || new Date().getFullYear())
 
 const formatDate = (date) => {
+  if (!date) return 'N/A'
   return new Date(date).toLocaleDateString('en-TZ', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+  })
+}
+
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('sw-TZ', {
+    style: 'currency',
+    currency: 'TZS',
+    minimumFractionDigits: 0,
+  }).format(value)
+}
+
+const generateReport = () => {
+  router.post('/reports/generate', {
+    type: selectedReportType.value,
+    month: selectedMonth.value,
+    year: selectedYear.value,
   })
 }
 </script>

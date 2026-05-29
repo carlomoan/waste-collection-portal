@@ -10,29 +10,29 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Deposits (This Month)</div>
-          <div class="summary-value">{{ formatCurrency(8500000) }}</div>
-          <div class="summary-change summary-change--positive">+15.2% vs last month</div>
+          <div class="summary-value">{{ formatCurrency(recentDeposits.reduce((sum, d) => sum + (d.amount || 0), 0)) }}</div>
+          <div class="summary-change summary-change--positive">{{ recentDeposits.length }} deposits this month</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Pending Deposits</div>
-          <div class="summary-value">{{ formatCurrency(1250000) }}</div>
-          <div class="summary-change summary-change--neutral">3 deposits awaiting confirmation</div>
+          <div class="summary-value">{{ formatCurrency(recentDeposits.filter(d => d.status === 'pending').reduce((sum, d) => sum + (d.amount || 0), 0)) }}</div>
+          <div class="summary-change summary-change--neutral">{{ recentDeposits.filter(d => d.status === 'pending').length }} deposits awaiting confirmation</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Bank Accounts</div>
-          <div class="summary-value">3 Active</div>
-          <div class="summary-change summary-change--neutral">CRDB, NMB, NBC</div>
+          <div class="summary-value">{{ bankAccounts.length }} Active</div>
+          <div class="summary-change summary-change--neutral">{{ bankAccounts.map(a => a.bank_name).join(', ') }}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Last Deposit</div>
-          <div class="summary-value">{{ formatDate('2026-05-25') }}</div>
-          <div class="summary-change summary-change--positive">{{ formatCurrency(450000) }}</div>
+          <div class="summary-value">{{ formatDate(recentDeposits[0]?.date) }}</div>
+          <div class="summary-change summary-change--positive">{{ formatCurrency(recentDeposits[0]?.amount || 0) }}</div>
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div class="actions-bar">
-        <button class="action-btn action-btn--primary">
+        <button class="action-btn action-btn--primary" @click="navigateToNewDeposit">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
           </svg>
@@ -56,53 +56,24 @@
       <div class="accounts-section">
         <h3>Bank Accounts</h3>
         <div class="accounts-grid">
-          <div class="account-card">
+          <div v-for="account in bankAccounts" :key="account.id" class="account-card">
             <div class="account-header">
-              <div class="account-name">CRDB Bank</div>
-              <div class="account-balance">{{ formatCurrency(5200000) }}</div>
+              <div class="account-name">{{ account.bank_name }}</div>
+              <div class="account-balance">{{ formatCurrency(account.balance) }}</div>
             </div>
             <div class="account-details">
               <div class="account-detail">
                 <span class="detail-label">Account Number:</span>
-                <span class="detail-value">0152345678900</span>
+                <span class="detail-value">{{ account.account_number }}</span>
               </div>
               <div class="account-detail">
                 <span class="detail-label">Status:</span>
-                <span class="detail-value status--active">Active</span>
+                <span class="detail-value status--active">{{ account.status }}</span>
               </div>
             </div>
           </div>
-          <div class="account-card">
-            <div class="account-header">
-              <div class="account-name">NMB Bank</div>
-              <div class="account-balance">{{ formatCurrency(2800000) }}</div>
-            </div>
-            <div class="account-details">
-              <div class="account-detail">
-                <span class="detail-label">Account Number:</span>
-                <span class="detail-value">0159876543210</span>
-              </div>
-              <div class="account-detail">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value status--active">Active</span>
-              </div>
-            </div>
-          </div>
-          <div class="account-card">
-            <div class="account-header">
-              <div class="account-name">NBC Bank</div>
-              <div class="account-balance">{{ formatCurrency(500000) }}</div>
-            </div>
-            <div class="account-details">
-              <div class="account-detail">
-                <span class="detail-label">Account Number:</span>
-                <span class="detail-value">0151122334455</span>
-              </div>
-              <div class="account-detail">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value status--active">Active</span>
-              </div>
-            </div>
+          <div v-if="bankAccounts.length === 0" style="grid-column: 1/-1; text-align: center; color: #4a6357; padding: 40px;">
+            No bank accounts found
           </div>
         </div>
       </div>
@@ -125,39 +96,59 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>{{ formatDate('2026-05-25') }}</td>
-              <td>CRDB Bank</td>
-              <td>{{ formatCurrency(450000) }}</td>
-              <td>DEP-2026-0525-001</td>
-              <td><span class="status-badge status-badge--confirmed">Confirmed</span></td>
-              <td><button class="table-action">View</button></td>
+            <tr v-for="deposit in recentDeposits" :key="deposit.id">
+              <td>{{ formatDate(deposit.date) }}</td>
+              <td>{{ deposit.bank_account }}</td>
+              <td>{{ formatCurrency(deposit.amount) }}</td>
+              <td>{{ deposit.reference }}</td>
+              <td><span class="status-badge" :class="`status-badge--${deposit.status}`">{{ deposit.status }}</span></td>
+              <td>
+                <button class="table-action" @click="confirmDelete(deposit)">Delete</button>
+              </td>
             </tr>
-            <tr>
-              <td>{{ formatDate('2026-05-24') }}</td>
-              <td>NMB Bank</td>
-              <td>{{ formatCurrency(320000) }}</td>
-              <td>DEP-2026-0524-002</td>
-              <td><span class="status-badge status-badge--pending">Pending</span></td>
-              <td><button class="table-action">Confirm</button></td>
-            </tr>
-            <tr>
-              <td>{{ formatDate('2026-05-23') }}</td>
-              <td>CRDB Bank</td>
-              <td>{{ formatCurrency(580000) }}</td>
-              <td>DEP-2026-0523-001</td>
-              <td><span class="status-badge status-badge--confirmed">Confirmed</span></td>
-              <td><button class="table-action">View</button></td>
+            <tr v-if="recentDeposits.length === 0">
+              <td colspan="6" style="text-align: center; color: #4a6357;">No deposits found</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <Modal :show="showDeleteModal" @close="showDeleteModal = false" title="Delete Deposit">
+      <p>Are you sure you want to delete this deposit? This action cannot be undone.</p>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showDeleteModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--danger" @click="deleteDeposit" :disabled="deleteForm.processing">
+          {{ deleteForm.processing ? 'Deleting...' : 'Delete' }}
+        </button>
+      </template>
+    </Modal>
   </AppLayout>
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import { router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
+
+const props = defineProps({
+  bankAccounts: {
+    type: Array,
+    default: () => []
+  },
+  recentDeposits: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const showAddModal = ref(false)
+const showDeleteModal = ref(false)
+const depositToDelete = ref(null)
+
+const deleteForm = useForm({})
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('sw-TZ', {
@@ -168,11 +159,32 @@ const formatCurrency = (value) => {
 }
 
 const formatDate = (date) => {
+  if (!date) return 'N/A'
   return new Date(date).toLocaleDateString('en-TZ', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   })
+}
+
+const confirmDelete = (deposit) => {
+  depositToDelete.value = deposit
+  showDeleteModal.value = true
+}
+
+const deleteDeposit = () => {
+  if (depositToDelete.value) {
+    deleteForm.delete(`/banking/${depositToDelete.value.id}`, {
+      onSuccess: () => {
+        showDeleteModal.value = false
+        depositToDelete.value = null
+      }
+    })
+  }
+}
+
+const navigateToNewDeposit = () => {
+  router.visit('/banking/create')
 }
 </script>
 
@@ -438,6 +450,41 @@ const formatDate = (date) => {
 .table-action:hover {
   border-color: #4caf76;
   color: #2d7a50;
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.modal-btn--cancel {
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  color: #4a6357;
+}
+
+.modal-btn--cancel:hover {
+  border-color: #4caf76;
+  color: #2d7a50;
+}
+
+.modal-btn--danger {
+  background: #c0392b;
+  border: 1px solid #c0392b;
+  color: white;
+}
+
+.modal-btn--danger:hover {
+  background: #a93226;
+  border-color: #a93226;
+}
+
+.modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1024px) {

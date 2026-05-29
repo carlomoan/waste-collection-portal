@@ -10,29 +10,29 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Vehicles</div>
-          <div class="summary-value">5</div>
+          <div class="summary-value">{{ vehicles.length }}</div>
           <div class="summary-change summary-change--neutral">All registered</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Active</div>
-          <div class="summary-value">4</div>
+          <div class="summary-value">{{ activeVehiclesCount }}</div>
           <div class="summary-change summary-change--positive">Currently in operation</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">In Maintenance</div>
-          <div class="summary-value">1</div>
+          <div class="summary-value">{{ maintenanceVehiclesCount }}</div>
           <div class="summary-change summary-change--neutral">Scheduled service</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Fuel Cost (This Month)</div>
-          <div class="summary-value">{{ formatCurrency(850000) }}</div>
-          <div class="summary-change summary-change--negative">+5.2% vs last month</div>
+          <div class="summary-label">Hired Vehicles</div>
+          <div class="summary-value">{{ hiredVehiclesCount }}</div>
+          <div class="summary-change summary-change--neutral">On hire agreement</div>
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div class="actions-bar">
-        <button class="action-btn action-btn--primary">
+        <button class="action-btn action-btn--primary" @click="showAddModal = true">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
           </svg>
@@ -67,174 +67,39 @@
           </div>
         </div>
         <div class="vehicles-grid">
-          <div class="vehicle-card">
+          <div v-for="vehicle in vehicles" :key="vehicle.id" class="vehicle-card">
             <div class="vehicle-header">
               <div class="vehicle-icon vehicle-icon--truck">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/>
                 </svg>
               </div>
-              <div class="vehicle-status vehicle-status--active">Active</div>
+              <div class="vehicle-status" :class="`vehicle-status--${vehicle.status}`">{{ vehicle.status }}</div>
+              <div v-if="vehicle.is_hired" class="vehicle-badge vehicle-badge--hired">Hired</div>
             </div>
-            <div class="vehicle-name">TRK-001</div>
-            <div class="vehicle-plate">T 123 AB</div>
+            <div class="vehicle-name">{{ vehicle.type }}</div>
+            <div class="vehicle-plate">{{ vehicle.plate_number }}</div>
             <div class="vehicle-details">
               <div class="vehicle-detail">
-                <span class="detail-label">Type:</span>
-                <span class="detail-value">Collection Truck</span>
-              </div>
-              <div class="vehicle-detail">
                 <span class="detail-label">Driver:</span>
-                <span class="detail-value">Ali Hassan</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Zone:</span>
-                <span class="detail-value">All Zones</span>
+                <span class="detail-value">{{ vehicle.driver }}</span>
               </div>
               <div class="vehicle-detail">
                 <span class="detail-label">Fuel Level:</span>
-                <span class="detail-value">75%</span>
+                <span class="detail-value">{{ vehicle.fuel_level }}%</span>
+              </div>
+              <div v-if="vehicle.is_hired" class="vehicle-detail">
+                <span class="detail-label">Hire End:</span>
+                <span class="detail-value">{{ formatDate(vehicle.hire_end_date) }}</span>
+              </div>
+              <div v-if="!vehicle.is_hired" class="vehicle-detail">
+                <span class="detail-label">Last Service:</span>
+                <span class="detail-value">{{ formatDate(vehicle.last_service) }}</span>
               </div>
             </div>
             <div class="vehicle-actions">
               <button class="vehicle-action">View</button>
-              <button class="vehicle-action">Edit</button>
-            </div>
-          </div>
-          <div class="vehicle-card">
-            <div class="vehicle-header">
-              <div class="vehicle-icon vehicle-icon--truck">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/>
-                </svg>
-              </div>
-              <div class="vehicle-status vehicle-status--active">Active</div>
-            </div>
-            <div class="vehicle-name">TRK-002</div>
-            <div class="vehicle-plate">T 456 CD</div>
-            <div class="vehicle-details">
-              <div class="vehicle-detail">
-                <span class="detail-label">Type:</span>
-                <span class="detail-value">Collection Truck</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Driver:</span>
-                <span class="detail-value">John Mwangi</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Zone:</span>
-                <span class="detail-value">Zone A-F</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Fuel Level:</span>
-                <span class="detail-value">60%</span>
-              </div>
-            </div>
-            <div class="vehicle-actions">
-              <button class="vehicle-action">View</button>
-              <button class="vehicle-action">Edit</button>
-            </div>
-          </div>
-          <div class="vehicle-card">
-            <div class="vehicle-header">
-              <div class="vehicle-icon vehicle-icon--truck">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/>
-                </svg>
-              </div>
-              <div class="vehicle-status vehicle-status--maintenance">Maintenance</div>
-            </div>
-            <div class="vehicle-name">TRK-003</div>
-            <div class="vehicle-plate">T 789 EF</div>
-            <div class="vehicle-details">
-              <div class="vehicle-detail">
-                <span class="detail-label">Type:</span>
-                <span class="detail-value">Collection Truck</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Driver:</span>
-                <span class="detail-value">-</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Zone:</span>
-                <span class="detail-value">-</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Fuel Level:</span>
-                <span class="detail-value">-</span>
-              </div>
-            </div>
-            <div class="vehicle-actions">
-              <button class="vehicle-action">View</button>
-              <button class="vehicle-action">Edit</button>
-            </div>
-          </div>
-          <div class="vehicle-card">
-            <div class="vehicle-header">
-              <div class="vehicle-icon vehicle-icon--pickup">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/>
-                </svg>
-              </div>
-              <div class="vehicle-status vehicle-status--active">Active</div>
-            </div>
-            <div class="vehicle-name">PKP-001</div>
-            <div class="vehicle-plate">T 321 GH</div>
-            <div class="vehicle-details">
-              <div class="vehicle-detail">
-                <span class="detail-label">Type:</span>
-                <span class="detail-value">Pickup Truck</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Driver:</span>
-                <span class="detail-value">Sarah Shechambo</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Zone:</span>
-                <span class="detail-value">Zone G-J</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Fuel Level:</span>
-                <span class="detail-value">90%</span>
-              </div>
-            </div>
-            <div class="vehicle-actions">
-              <button class="vehicle-action">View</button>
-              <button class="vehicle-action">Edit</button>
-            </div>
-          </div>
-          <div class="vehicle-card">
-            <div class="vehicle-header">
-              <div class="vehicle-icon vehicle-icon--pickup">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/>
-                </svg>
-              </div>
-              <div class="vehicle-status vehicle-status--active">Active</div>
-            </div>
-            <div class="vehicle-name">PKP-002</div>
-            <div class="vehicle-plate">T 654 IJ</div>
-            <div class="vehicle-details">
-              <div class="vehicle-detail">
-                <span class="detail-label">Type:</span>
-                <span class="detail-value">Pickup Truck</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Driver:</span>
-                <span class="detail-value">Fatuma Makame</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Zone:</span>
-                <span class="detail-value">Zone K-L</span>
-              </div>
-              <div class="vehicle-detail">
-                <span class="detail-label">Fuel Level:</span>
-                <span class="detail-value">45%</span>
-              </div>
-            </div>
-            <div class="vehicle-actions">
-              <button class="vehicle-action">View</button>
-              <button class="vehicle-action">Edit</button>
+              <button class="vehicle-action vehicle-action--delete" @click="confirmDelete(vehicle)">Delete</button>
             </div>
           </div>
         </div>
@@ -295,11 +160,70 @@
         </table>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <Modal :show="showDeleteModal" @close="showDeleteModal = false" title="Delete Vehicle">
+      <p>Are you sure you want to delete this vehicle? This action cannot be undone.</p>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showDeleteModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--danger" @click="deleteVehicle" :disabled="deleteForm.processing">
+          {{ deleteForm.processing ? 'Deleting...' : 'Delete' }}
+        </button>
+      </template>
+    </Modal>
   </AppLayout>
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
+import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
+
+const props = defineProps({
+  vehicles: {
+    type: Array,
+    default: () => []
+  },
+  maintenanceSchedule: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const showAddModal = ref(false)
+const showDeleteModal = ref(false)
+const vehicleToDelete = ref(null)
+
+const activeVehiclesCount = computed(() => {
+  return props.vehicles.filter(v => v.status === 'active').length
+})
+
+const maintenanceVehiclesCount = computed(() => {
+  return props.vehicles.filter(v => v.status === 'maintenance').length
+})
+
+const hiredVehiclesCount = computed(() => {
+  return props.vehicles.filter(v => v.is_hired).length
+})
+
+const deleteForm = useForm({})
+
+const confirmDelete = (vehicle) => {
+  vehicleToDelete.value = vehicle
+  showDeleteModal.value = true
+}
+
+const deleteVehicle = () => {
+  if (vehicleToDelete.value) {
+    deleteForm.delete(`/vehicles/${vehicleToDelete.value.id}`, {
+      onSuccess: () => {
+        showDeleteModal.value = false
+        vehicleToDelete.value = null
+      }
+    })
+  }
+}
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('sw-TZ', {
@@ -310,6 +234,7 @@ const formatCurrency = (value) => {
 }
 
 const formatDate = (date) => {
+  if (!date) return 'N/A'
   return new Date(date).toLocaleDateString('en-TZ', {
     year: 'numeric',
     month: 'short',
@@ -590,6 +515,62 @@ const formatDate = (date) => {
 .vehicle-action:hover {
   border-color: #4caf76;
   color: #2d7a50;
+}
+
+.vehicle-action--delete {
+  color: #c0392b;
+}
+
+.vehicle-action--delete:hover {
+  border-color: #c0392b;
+  color: #a93226;
+}
+
+.vehicle-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.vehicle-badge--hired {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.modal-btn--cancel {
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  color: #4a6357;
+}
+
+.modal-btn--cancel:hover {
+  border-color: #4caf76;
+  color: #2d7a50;
+}
+
+.modal-btn--danger {
+  background: #c0392b;
+  border: 1px solid #c0392b;
+  color: white;
+}
+
+.modal-btn--danger:hover {
+  background: #a93226;
+  border-color: #a93226;
+}
+
+.modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .maintenance-section {

@@ -23,23 +23,29 @@
       <div class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-label">Total Revenue</div>
-          <div class="kpi-value">{{ formatCurrency(12500000) }}</div>
-          <div class="kpi-change kpi-change--positive">+12.5% vs last period</div>
+          <div class="kpi-value">{{ formatCurrency(metrics.totalRevenue || 0) }}</div>
+          <div class="kpi-change" :class="metrics.revenueChange >= 0 ? 'kpi-change--positive' : 'kpi-change--negative'">
+            {{ metrics.revenueChange >= 0 ? '+' : '' }}{{ metrics.revenueChange?.toFixed(1) || 0 }}% vs last period
+          </div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Collection Rate</div>
-          <div class="kpi-value">78.4%</div>
-          <div class="kpi-change kpi-change--positive">+3.2% vs last period</div>
+          <div class="kpi-value">{{ metrics.collectionRate?.toFixed(1) || 0 }}%</div>
+          <div class="kpi-change" :class="metrics.collectionRateChange >= 0 ? 'kpi-change--positive' : 'kpi-change--negative'">
+            {{ metrics.collectionRateChange >= 0 ? '+' : '' }}{{ metrics.collectionRateChange?.toFixed(1) || 0 }}% vs last period
+          </div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Active Clients</div>
-          <div class="kpi-value">1,247</div>
-          <div class="kpi-change kpi-change--neutral">+15 new clients</div>
+          <div class="kpi-value">{{ metrics.activeClients || 0 }}</div>
+          <div class="kpi-change kpi-change--neutral">+{{ metrics.newClients || 0 }} new clients</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Outstanding Debt</div>
-          <div class="kpi-value">{{ formatCurrency(3420000) }}</div>
-          <div class="kpi-change kpi-change--negative">+8.1% vs last period</div>
+          <div class="kpi-value">{{ formatCurrency(metrics.outstandingDebt || 0) }}</div>
+          <div class="kpi-change" :class="metrics.debtChange >= 0 ? 'kpi-change--negative' : 'kpi-change--positive'">
+            {{ metrics.debtChange >= 0 ? '+' : '' }}{{ metrics.debtChange?.toFixed(1) || 0 }}% vs last period
+          </div>
         </div>
       </div>
 
@@ -73,7 +79,7 @@
       <div class="data-table-section">
         <div class="table-header">
           <h3>Top Performing Collectors</h3>
-          <button class="export-btn">Export Data</button>
+          <button class="export-btn" @click="navigateToReports">View Full Report</button>
         </div>
         <table class="data-table">
           <thead>
@@ -86,26 +92,15 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>Sarah Shechambo</td>
-              <td>Zone A-F</td>
-              <td>156</td>
-              <td>{{ formatCurrency(4500000) }}</td>
-              <td>92.3%</td>
+            <tr v-for="collector in topCollectors" :key="collector.name">
+              <td>{{ collector.name }}</td>
+              <td>{{ collector.zone }}</td>
+              <td>{{ collector.collections || 0 }}</td>
+              <td>{{ formatCurrency(collector.collections || 0) }}</td>
+              <td>{{ ((collector.collections || 0) / (metrics.totalRevenue || 1) * 100).toFixed(1) }}%</td>
             </tr>
-            <tr>
-              <td>John Mwangi</td>
-              <td>Zone G-J</td>
-              <td>142</td>
-              <td>{{ formatCurrency(3800000) }}</td>
-              <td>87.5%</td>
-            </tr>
-            <tr>
-              <td>Fatuma Makame</td>
-              <td>Zone K-L</td>
-              <td>128</td>
-              <td>{{ formatCurrency(3200000) }}</td>
-              <td>81.2%</td>
+            <tr v-if="topCollectors.length === 0">
+              <td colspan="5" style="text-align: center; color: #4a6357;">No collector data available</td>
             </tr>
           </tbody>
         </table>

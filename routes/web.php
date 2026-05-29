@@ -24,6 +24,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\BulkImportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -54,6 +55,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     */
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics');
+
+    /*
+    |------------------------------------------------------------------
+    | Finance — Banking
+    |------------------------------------------------------------------
+    */
+    Route::get('/banking', [BankingController::class, 'index'])->name('banking.index');
+    Route::post('/banking', [BankingController::class, 'store'])->name('banking.store');
+    Route::put('/banking/{deposit}', [BankingController::class, 'update'])->name('banking.update');
+    Route::post('/banking/{deposit}/confirm', [BankingController::class, 'confirm'])->name('banking.confirm');
 
     /*
     |------------------------------------------------------------------
@@ -111,15 +122,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     /*
     |------------------------------------------------------------------
-    | Finance — Banking
+    | Collections — Bulk Import
     |------------------------------------------------------------------
     */
-    Route::prefix('banking')->name('banking.')->group(function () {
-        Route::get('/',            [BankingController::class, 'index'])->name('index');
-        Route::post('/',           [BankingController::class, 'store'])->name('store');
-        Route::put('/{deposit}',   [BankingController::class, 'update'])->name('update');
-        Route::post('/{deposit}/confirm', [BankingController::class, 'confirm'])->name('confirm');
+    Route::prefix('bulk-import')->name('bulk-import.')->group(function () {
+        Route::get('/',                  [BulkImportController::class, 'index'])->name('index');
+        Route::post('/',                 [BulkImportController::class, 'store'])->name('store');
+        Route::get('/download-template', [BulkImportController::class, 'downloadTemplate'])->name('download-template');
     });
+
 
     /*
     |------------------------------------------------------------------
