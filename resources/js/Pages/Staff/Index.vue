@@ -10,23 +10,23 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Staff</div>
-          <div class="summary-value">18</div>
+          <div class="summary-value">{{ totalStaff }}</div>
           <div class="summary-change summary-change--neutral">All departments</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Active</div>
-          <div class="summary-value">16</div>
+          <div class="summary-value">{{ activeStaff }}</div>
           <div class="summary-change summary-change--positive">Currently working</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">On Leave</div>
-          <div class="summary-value">2</div>
-          <div class="summary-change summary-change--neutral">1 sick, 1 vacation</div>
+          <div class="summary-value">{{ onLeaveStaff }}</div>
+          <div class="summary-change summary-change--neutral">Inactive staff</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Departments</div>
-          <div class="summary-value">4</div>
-          <div class="summary-change summary-change--positive">Operations, Admin, etc.</div>
+          <div class="summary-label">Zones</div>
+          <div class="summary-value">{{ zones.length }}</div>
+          <div class="summary-change summary-change--positive">Coverage areas</div>
         </div>
       </div>
 
@@ -48,7 +48,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607z"/>
           </svg>
-          <input type="text" placeholder="Search staff..." class="search-input">
+          <input type="text" v-model="searchQuery" placeholder="Search staff..." class="search-input">
         </div>
       </div>
 
@@ -57,17 +57,18 @@
         <div class="section-header">
           <h3>All Staff Members</h3>
           <div class="filter-actions">
-            <select class="filter-select">
-              <option>All Departments</option>
-              <option>Operations</option>
-              <option>Admin</option>
-              <option>Finance</option>
+            <select v-model="filterDepartment" class="filter-select">
+              <option value="">All Departments</option>
+              <option value="collector">Collector</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+              <option value="finance">Finance</option>
             </select>
-            <select class="filter-select">
-              <option>All Status</option>
-              <option>Active</option>
-              <option>On Leave</option>
-              <option>Inactive</option>
+            <select v-model="filterStatus" class="filter-select">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="on-leave">On Leave</option>
+              <option value="inactive">Inactive</option>
             </select>
           </div>
         </div>
@@ -84,105 +85,27 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr v-for="staffMember in filteredStaff" :key="staffMember.id">
               <td>
                 <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--sarah">SS</div>
+                  <div class="staff-avatar">{{ initials(staffMember.name) }}</div>
                   <div class="staff-details">
-                    <div class="staff-name">Sarah Shechambo</div>
-                    <div class="staff-id">STF-001</div>
+                    <div class="staff-name">{{ staffMember.name }}</div>
+                    <div class="staff-id">STF-{{ staffMember.id }}</div>
                   </div>
                 </div>
               </td>
-              <td>Collector</td>
+              <td>{{ staffMember.role }}</td>
               <td>Operations</td>
-              <td>Zone A-F</td>
-              <td>+255 712 345 678</td>
-              <td><span class="status-badge status-badge--active">Active</span></td>
+              <td>{{ staffMember.zone }}</td>
+              <td>{{ staffMember.phone }}</td>
+              <td><span class="status-badge" :class="`status-badge--${staffMember.is_active ? 'active' : 'inactive'}`">{{ staffMember.is_active ? 'Active' : 'Inactive' }}</span></td>
               <td>
-                <button class="table-action">View</button>
-                <button class="table-action">Edit</button>
+                <Link :href="route('staff.show', staffMember.id)" class="table-action">View</Link>
               </td>
             </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--john">JM</div>
-                  <div class="staff-details">
-                    <div class="staff-name">John Mwangi</div>
-                    <div class="staff-id">STF-002</div>
-                  </div>
-                </div>
-              </td>
-              <td>Collector</td>
-              <td>Operations</td>
-              <td>Zone G-J</td>
-              <td>+255 713 456 789</td>
-              <td><span class="status-badge status-badge--active">Active</span></td>
-              <td>
-                <button class="table-action">View</button>
-                <button class="table-action">Edit</button>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--ali">AH</div>
-                  <div class="staff-details">
-                    <div class="staff-name">Ali Hassan</div>
-                    <div class="staff-id">STF-004</div>
-                  </div>
-                </div>
-              </td>
-              <td>Driver</td>
-              <td>Operations</td>
-              <td>All Zones</td>
-              <td>+255 714 567 890</td>
-              <td><span class="status-badge status-badge--active">Active</span></td>
-              <td>
-                <button class="table-action">View</button>
-                <button class="table-action">Edit</button>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--mary">MK</div>
-                  <div class="staff-details">
-                    <div class="staff-name">Mary Kileo</div>
-                    <div class="staff-id">STF-005</div>
-                  </div>
-                </div>
-              </td>
-              <td>Admin</td>
-                  <td>Admin</td>
-              <td>-</td>
-              <td>+255 715 678 901</td>
-              <td><span class="status-badge status-badge--leave">On Leave</span></td>
-              <td>
-                <button class="table-action">View</button>
-                <button class="table-action">Edit</button>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--fatuma">FM</div>
-                  <div class="staff-details">
-                    <div class="staff-name">Fatuma Makame</div>
-                    <div class="staff-id">STF-003</div>
-                  </div>
-                </div>
-              </td>
-              <td>Collector</td>
-              <td>Operations</td>
-              <td>Zone K-L</td>
-              <td>+255 716 789 012</td>
-              <td><span class="status-badge status-badge--active">Active</span></td>
-              <td>
-                <button class="table-action">View</button>
-                <button class="table-action">Edit</button>
-              </td>
+            <tr v-if="staff.length === 0">
+              <td colspan="7" style="text-align: center; color: #4a6357;">No staff found</td>
             </tr>
           </tbody>
         </table>
@@ -279,7 +202,48 @@
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+
+const props = defineProps({
+  staff: {
+    type: Array,
+    default: () => []
+  },
+  zones: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const searchQuery = ref('')
+const filterDepartment = ref('')
+const filterStatus = ref('')
+
+const filteredStaff = computed(() => {
+  return props.staff.filter(s => {
+    const matchesSearch = !searchQuery.value ||
+      s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      s.phone?.includes(searchQuery.value)
+    const matchesDepartment = !filterDepartment.value ||
+      s.role === filterDepartment.value
+    const matchesStatus = !filterStatus.value ||
+      (filterStatus.value === 'active' && s.is_active) ||
+      (filterStatus.value === 'inactive' && !s.is_active) ||
+      (filterStatus.value === 'on-leave' && !s.is_active)
+    return matchesSearch && matchesDepartment && matchesStatus
+  })
+})
+
+const totalStaff = computed(() => props.staff.length)
+const activeStaff = computed(() => props.staff.filter(s => s.is_active).length)
+const onLeaveStaff = computed(() => props.staff.filter(s => !s.is_active).length)
+
+const initials = (name) => {
+  if (!name) return '??'
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
 </script>
 
 <style scoped>

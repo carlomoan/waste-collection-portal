@@ -62,14 +62,13 @@ class AnalyticsController extends Controller
 
             $newClients = $activeClients - $lastActiveClients;
 
-            $outstandingDebt = Debt::where('status', 'pending')
-                ->where('status', '!=', 'paid')
-                ->sum('amount') ?? 0;
+            $outstandingDebt = Invoice::whereIn('status', ['unpaid', 'partial', 'overdue'])
+                ->sum('balance') ?? 0;
 
-            $lastOutstandingDebt = Debt::whereMonth('created_at', $lastMonth)
+            $lastOutstandingDebt = Invoice::whereMonth('created_at', $lastMonth)
                 ->whereYear('created_at', $lastYear)
-                ->where('status', '!=', 'paid')
-                ->sum('amount') ?? 0;
+                ->whereIn('status', ['unpaid', 'partial', 'overdue'])
+                ->sum('balance') ?? 0;
 
             $debtChange = $lastOutstandingDebt > 0 ? (($outstandingDebt - $lastOutstandingDebt) / $lastOutstandingDebt) * 100 : 0;
 
@@ -142,7 +141,27 @@ class AnalyticsController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load analytics data: ' . $e->getMessage());
+            \Log::error('Analytics error: ' . $e->getMessage());
+            return Inertia::render('Analytics', [
+                'metrics' => [
+                    'totalRevenue' => 0,
+                    'revenueChange' => 0,
+                    'collectionRate' => 0,
+                    'collectionRateChange' => 0,
+                    'activeClients' => 0,
+                    'newClients' => 0,
+                    'outstandingDebt' => 0,
+                    'debtChange' => 0,
+                ],
+                'revenueTrend' => [],
+                'collectionByZone' => [],
+                'topCollectors' => [],
+                'period' => [
+                    'month' => now()->month,
+                    'year' => now()->year,
+                ],
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

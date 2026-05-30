@@ -10,22 +10,22 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Activities</div>
-          <div class="summary-value">1,247</div>
+          <div class="summary-value">{{ totalActivities }}</div>
           <div class="summary-change summary-change--positive">This month</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Active Users</div>
-          <div class="summary-value">8</div>
+          <div class="summary-value">{{ activeUsers }}</div>
           <div class="summary-change summary-change--neutral">Today</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Failed Logins</div>
-          <div class="summary-value">3</div>
+          <div class="summary-value">{{ failedLogins }}</div>
           <div class="summary-change summary-change--negative">Security alerts</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Data Changes</div>
-          <div class="summary-value">156</div>
+          <div class="summary-value">{{ dataChanges }}</div>
           <div class="summary-change summary-change--neutral">This week</div>
         </div>
       </div>
@@ -100,117 +100,22 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T14:32:15') }}</td>
+            <tr v-for="activity in activities" :key="activity.id">
+              <td>{{ formatDateTime(activity.timestamp) }}</td>
               <td>
                 <div class="user-info">
-                  <div class="user-avatar user-avatar--admin">AD</div>
-                  <span>Admin User</span>
+                  <div class="user-avatar">{{ initials(activity.user) }}</div>
+                  <span>{{ activity.user }}</span>
                 </div>
               </td>
-              <td><span class="action-badge action-badge--create">Create</span></td>
-              <td>Clients</td>
-              <td>Created new client: Juma Mwinyi</td>
-              <td>192.168.1.100</td>
-              <td><span class="status-badge status-badge--success">Success</span></td>
+              <td><span class="action-badge" :class="`action-badge--${activity.action}`">{{ activity.action }}</span></td>
+              <td>{{ activity.module }}</td>
+              <td>{{ activity.description }}</td>
+              <td>{{ activity.ip_address }}</td>
+              <td><span class="status-badge" :class="`status-badge--${activity.status}`">{{ activity.status }}</span></td>
             </tr>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T14:28:42') }}</td>
-              <td>
-                <div class="user-info">
-                  <div class="user-avatar user-avatar--finance">FN</div>
-                  <span>Mary Kileo</span>
-                </div>
-              </td>
-              <td><span class="action-badge action-badge--update">Update</span></td>
-              <td>Transactions</td>
-              <td>Updated payment status for INV-2026-001</td>
-              <td>192.168.1.105</td>
-              <td><span class="status-badge status-badge--success">Success</span></td>
-            </tr>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T14:15:30') }}</td>
-              <td>
-                <div class="user-info">
-                  <div class="user-avatar user-avatar--manager">MG</div>
-                  <span>John Mwangi</span>
-                </div>
-              </td>
-              <td><span class="action-badge action-badge--export">Export</span></td>
-              <td>Reports</td>
-              <td>Exported monthly collection report</td>
-              <td>192.168.1.110</td>
-              <td><span class="status-badge status-badge--success">Success</span></td>
-            </tr>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T14:02:18') }}</td>
-              <td>
-                <div class="user-info">
-                  <div class="user-avatar user-avatar--unknown">?</div>
-                  <span>Unknown</span>
-                </div>
-              </td>
-              <td><span class="action-badge action-badge--login">Login</span></td>
-              <td>Auth</td>
-              <td>Failed login attempt - invalid credentials</td>
-              <td>10.0.0.45</td>
-              <td><span class="status-badge status-badge--error">Failed</span></td>
-            </tr>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T13:45:55') }}</td>
-              <td>
-                <div class="user-info">
-                  <div class="user-avatar user-avatar--collector">CL</div>
-                  <span>Sarah Shechambo</span>
-                </div>
-              </td>
-              <td><span class="action-badge action-badge--update">Update</span></td>
-              <td>Collections</td>
-              <td>Recorded collection for client C-001</td>
-              <td>192.168.1.115</td>
-              <td><span class="status-badge status-badge--success">Success</span></td>
-            </tr>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T13:30:22') }}</td>
-              <td>
-                <div class="user-info">
-                  <div class="user-avatar user-avatar--admin">AD</div>
-                  <span>Admin User</span>
-                </div>
-              </td>
-              <td><span class="action-badge action-badge--delete">Delete</span></td>
-              <td>Staff</td>
-              <td>Deleted staff record: STF-999</td>
-              <td>192.168.1.100</td>
-              <td><span class="status-badge status-badge--success">Success</span></td>
-            </tr>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T13:15:10') }}</td>
-              <td>
-                <div class="user-info">
-                  <div class="user-avatar user-avatar--finance">FN</div>
-                  <span>Mary Kileo</span>
-                </div>
-              </td>
-              <td><span class="action-badge action-badge--create">Create</span></td>
-              <td>Expenses</td>
-              <td>Created expense record: Fuel purchase</td>
-              <td>192.168.1.105</td>
-              <td><span class="status-badge status-badge--success">Success</span></td>
-            </tr>
-            <tr>
-              <td>{{ formatDateTime('2026-05-27T12:58:45') }}</td>
-              <td>
-                <div class="user-info">
-                  <div class="user-avatar user-avatar--manager">MG</div>
-                  <span>John Mwangi</span>
-                </div>
-              </td>
-              <td><span class="action-badge action-badge--update">Update</span></td>
-              <td>Settings</td>
-              <td>Updated system configuration</td>
-              <td>192.168.1.110</td>
-              <td><span class="status-badge status-badge--success">Success</span></td>
+            <tr v-if="activities.length === 0">
+              <td colspan="7" style="text-align: center; color: #4a6357;">No audit logs found</td>
             </tr>
           </tbody>
         </table>
@@ -249,9 +154,28 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
+const props = defineProps({
+  activities: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const totalActivities = computed(() => props.activities.length)
+const activeUsers = computed(() => new Set(props.activities.map(a => a.user)).size)
+const failedLogins = computed(() => props.activities.filter(a => a.action === 'login' && a.status === 'failed').length)
+const dataChanges = computed(() => props.activities.filter(a => ['create', 'update', 'delete'].includes(a.action)).length)
+
+const initials = (name) => {
+  if (!name) return '??'
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
+
 const formatDateTime = (datetime) => {
+  if (!datetime) return 'N/A'
   const date = new Date(datetime)
   return date.toLocaleString('en-TZ', {
     year: 'numeric',

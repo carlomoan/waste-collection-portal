@@ -2,13 +2,13 @@
   <AppLayout title="Client Registry">
 
     <div class="page-actions">
-      <Link :href="route('clients.create')" class="btn-primary">
+      <button class="btn-primary" @click="showAddModal = true">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
              stroke-width="2" stroke="currentColor" width="14" height="14">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
         </svg>
         Add Client
-      </Link>
+      </button>
     </div>
 
     <!-- Filters -->
@@ -114,18 +114,96 @@
       </div>
     </div>
 
+    <!-- Add Client Modal -->
+    <Modal :show="showAddModal" @close="showAddModal = false" title="Add Client">
+      <form @submit.prevent="addClient">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" v-model="addForm.name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" v-model="addForm.phone" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" v-model="addForm.email" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" v-model="addForm.address" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Zone</label>
+          <select v-model="addForm.zone_id" class="form-input" required>
+            <option value="">Select zone</option>
+            <option v-for="z in zones" :key="z.id" :value="z.id">{{ z.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Client Type</label>
+          <select v-model="addForm.client_type" class="form-input">
+            <option value="residential">Residential</option>
+            <option value="commercial">Commercial</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Monthly Fee (TZS)</label>
+          <input type="number" v-model="addForm.monthly_fee" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select v-model="addForm.status" class="form-input">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showAddModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="addClient" :disabled="addForm.processing">
+          {{ addForm.processing ? 'Adding...' : 'Add Client' }}
+        </button>
+      </template>
+    </Modal>
+
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
+import { useForm } from '@inertiajs/vue3'
 
 const props = defineProps({
   clients: { type: Array, default: () => [] },
   zones:   { type: Array, default: () => [] },
 })
+
+const showAddModal = ref(false)
+
+const addForm = useForm({
+  name: '',
+  phone: '',
+  email: '',
+  address: '',
+  zone_id: '',
+  client_type: 'residential',
+  monthly_fee: '',
+  status: 'active'
+})
+
+const addClient = () => {
+  addForm.post('/clients', {
+    onSuccess: () => {
+      showAddModal.value = false
+      addForm.reset()
+    }
+  })
+}
 
 const search       = ref('')
 const filterZone   = ref('')
@@ -229,4 +307,19 @@ const initials  = n => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperC
 .page-btn { padding: 5px 12px; border: 1px solid rgba(0,0,0,0.12); border-radius: 6px; font-size: 11px; color: #4a6357; background: #fff; cursor: pointer; }
 .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .page-info { font-size: 11px; color: #7a9489; }
+
+/* Form Styles */
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: #1a2e24; }
+.form-input {
+  width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 6px; font-size: 13px; color: #1a2e24; background: white;
+}
+.form-input:focus { outline: none; border-color: #4caf76; }
+.modal-btn {
+  padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none;
+}
+.modal-btn--cancel { background: #f5f5f5; color: #4a6357; }
+.modal-btn--primary { background: #4caf76; color: white; }
 </style>

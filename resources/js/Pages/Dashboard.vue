@@ -1,54 +1,63 @@
 <template>
   <AppLayout title="Dashboard">
 
-    <AlertBanner type="warning">
-      <strong>{{ stats.clients_unpaid }} clients</strong> have unpaid balances past the grace period
-      — penalty fees applicable.
-      <Link :href="route('debts.index')" class="alert-link">Review now →</Link>
+    <!-- Alert banner — only shows when there are unpaid clients -->
+    <AlertBanner v-if="stats.clients_unpaid > 0" type="warning">
+      <strong>{{ stats.clients_unpaid }} client{{ stats.clients_unpaid > 1 ? 's' : '' }}</strong>
+      have unpaid balances past the grace period — penalty fees applicable.
+      <Link href="/debts?status=active" class="alert-link">Review now →</Link>
     </AlertBanner>
 
-    <!-- Period tabs -->
-    <div class="tab-bar">
-      <button
-        v-for="tab in tabs" :key="tab.key"
-        class="tab" :class="{ 'tab--active': activeTab === tab.key }"
-        @click="activeTab = tab.key"
-      >{{ tab.label }}</button>
+    <!-- ── Period tabs + period label ─────────────────────────────────── -->
+    <div class="top-row">
+      <div class="tab-bar">
+        <button
+          v-for="tab in tabs" :key="tab.key"
+          class="tab" :class="{ 'tab--active': activePeriod === tab.key }"
+          :disabled="loading"
+          @click="switchPeriod(tab.key)"
+        >
+          <span v-if="loading && activePeriod === tab.key" class="tab-spinner" />
+          {{ tab.label }}
+        </button>
+      </div>
+      <span class="period-label">{{ periodLabel }}</span>
     </div>
 
-    <!-- KPI Cards -->
+    <!-- ── KPI Cards ──────────────────────────────────────────────────── -->
     <div class="kpi-grid">
       <StatCard
         label="Total Collected"
         :value="formatTZS(stats.total_collected)"
-        sub="TZS · May 1–15"
+        :sub="changeLabel(stats.collected_change, 'vs previous period')"
+        :trend="stats.collected_change >= 0 ? 'up' : 'down'"
         accent="green"
       />
       <StatCard
         label="Transactions"
-        :value="stats.total_transactions"
-        sub="+8 vs last period"
-        trend="up"
+        :value="stats.total_transactions.toLocaleString()"
+        :sub="changeLabel(stats.tx_change, 'vs previous period')"
+        :trend="stats.tx_change >= 0 ? 'up' : 'down'"
         accent="green"
       />
       <StatCard
         label="Outstanding Debt"
         :value="formatTZS(stats.total_outstanding)"
-        sub="TZS unpaid balance"
+        sub="Total unpaid balance"
         accent="amber"
       />
       <StatCard
         label="Penalty Due"
         :value="formatTZS(stats.total_penalties)"
         :sub="`${stats.clients_unpaid} defaulting clients`"
-        trend="down"
+        :trend="stats.clients_unpaid > 0 ? 'down' : null"
         accent="red"
       />
     </div>
 
-    <!-- Quick Actions -->
+    <!-- ── Quick Actions ──────────────────────────────────────────────── -->
     <div class="quick-actions">
-      <Link :href="route('reports.monthly')" class="qa-btn">
+      <a :href="exportUrl" class="qa-btn qa-btn--primary" title="Download monthly report as CSV">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
              stroke-width="1.8" stroke="currentColor" width="14" height="14">
           <path stroke-linecap="round" stroke-linejoin="round"
@@ -56,294 +65,523 @@
                18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
         </svg>
         Export Monthly Report
-      </Link>
-      <Link :href="route('debts.index')" class="qa-btn">
+      </a>
+
+      <Link href="/debts?status=active" class="qa-btn">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
              stroke-width="1.8" stroke="currentColor" width="14" height="14">
           <path stroke-linecap="round" stroke-linejoin="round"
-            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0
-               2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697
-               16.126ZM12 15.75h.007v.008H12v-.008Z"/>
+            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71
+               c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5
+               -3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/>
         </svg>
         Flag Non-Payers
+        <span v-if="stats.clients_unpaid" class="qa-badge">{{ stats.clients_unpaid }}</span>
       </Link>
-      <Link :href="route('reports.collector')" class="qa-btn">
+
+      <Link href="/reports/collector" class="qa-btn">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
              stroke-width="1.8" stroke="currentColor" width="14" height="14">
           <path stroke-linecap="round" stroke-linejoin="round"
-            d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5
-               7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>
+            d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501
+               20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75
+               c-2.676 0-5.216-.584-7.499-1.632Z"/>
         </svg>
         Collector Report
       </Link>
-      <Link :href="route('transactions.index')" class="qa-btn">
+
+      <Link href="/transactions" class="qa-btn">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
              stroke-width="1.8" stroke="currentColor" width="14" height="14">
           <path stroke-linecap="round" stroke-linejoin="round"
-            d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424
-               48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75
-               0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012
-               0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25
-               6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125
-               1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/>
+            d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0
+               2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424
+               0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75
+               .75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8
+               0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15
+               1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973
+               8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25
+               c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125
+               -1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/>
         </svg>
         All Transactions
+        <span class="qa-count">{{ stats.total_transactions }}</span>
+      </Link>
+
+      <Link href="/transactions/import" class="qa-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+             stroke-width="1.8" stroke="currentColor" width="14" height="14">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21
+               18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/>
+        </svg>
+        Import PDF / Excel
       </Link>
     </div>
 
-    <!-- Charts Row -->
+    <!-- ── Charts row ─────────────────────────────────────────────────── -->
     <div class="row-2">
-      <!-- Trend chart -->
-      <div class="card">
+      <!-- Trend bar chart -->
+      <div class="card" :class="{ 'card--loading': loading }">
         <div class="card-head">
-          <span class="card-title">Collection Trend — May 2026</span>
-          <Link :href="route('reports.monthly')" class="see-all">View full report →</Link>
+          <span class="card-title">
+            Collection Trend —
+            <span class="period-inline">{{ periodLabel }}</span>
+          </span>
+          <Link href="/reports/monthly" class="see-all">Full report →</Link>
         </div>
         <div class="chart-wrap">
-          <Bar :data="trendChartData" :options="trendChartOptions" />
+          <Bar v-if="trendReady" :data="trendChartData" :options="trendChartOptions" />
+          <div v-else class="chart-placeholder">
+            <span v-if="loading">Loading chart…</span>
+            <span v-else>No data for this period</span>
+          </div>
         </div>
       </div>
 
-      <!-- Band chart -->
-      <div class="card">
+      <!-- Amount band doughnut -->
+      <div class="card" :class="{ 'card--loading': loading }">
         <div class="card-head">
           <span class="card-title">Collection by Amount Band</span>
         </div>
         <div class="band-legend">
-          <span v-for="b in bandLegend" :key="b.label" class="legend-item">
-            <span class="legend-dot" :style="{ background: b.color }" />
-            {{ b.label }}
+          <span v-for="b in bandChartData.labels" :key="b" class="legend-item">
+            <span class="legend-dot"
+                  :style="{ background: bandColors[bandChartData.labels.indexOf(b)] }" />
+            {{ b }}
           </span>
         </div>
         <div class="chart-wrap chart-wrap--sm">
-          <Doughnut :data="bandChartData" :options="bandChartOptions" />
+          <Doughnut v-if="bandReady" :data="doughnutData" :options="doughnutOptions" />
+          <div v-else class="chart-placeholder">
+            <span v-if="loading">Loading…</span>
+            <span v-else>No data</span>
+          </div>
+        </div>
+        <!-- Centre total label -->
+        <div class="band-total">
+          <div class="bt-val">{{ stats.total_transactions }}</div>
+          <div class="bt-label">transactions</div>
         </div>
       </div>
     </div>
 
-    <!-- Transactions + Collectors -->
+    <!-- ── Recent transactions + Collector performance ────────────────── -->
     <div class="row-2">
+
       <!-- Recent transactions -->
       <div class="card">
         <div class="card-head">
           <span class="card-title">Recent Transactions</span>
-          <Link :href="route('transactions.index')" class="see-all">See all {{ stats.total_transactions }} →</Link>
+          <Link href="/transactions" class="see-all">
+            See all {{ stats.total_transactions }} →
+          </Link>
         </div>
-        <TransactionRow
-          v-for="tx in recentTransactions"
-          :key="tx.control_number"
-          v-bind="tx"
-        />
+        <div v-if="recentTransactions.length">
+          <TransactionRow
+            v-for="tx in recentTransactions"
+            :key="tx.controlNumber"
+            :payer-name="tx.payerName"
+            :control-number="tx.controlNumber"
+            :amount="tx.amount"
+            :status="tx.status"
+            :paid-at="tx.paidAt"
+          />
+        </div>
+        <div v-else class="empty-state">
+          No transactions in this period.
+          <Link href="/transactions/import" class="link">Import from PDF →</Link>
+        </div>
       </div>
 
       <!-- Collector performance -->
       <div class="card">
         <div class="card-head">
           <span class="card-title">Collector Performance</span>
-          <Link :href="route('reports.collector')" class="see-all">Full report →</Link>
+          <Link href="/reports/collector" class="see-all">Full report →</Link>
         </div>
-        <CollectorProgressRow
-          v-for="c in collectors"
-          :key="c.name"
-          v-bind="c"
-        />
-        <div class="target-note">
-          <strong>Target:</strong> 1,200,000 TZS/collector · Period ends May 31
+        <div v-if="collectors.length">
+          <CollectorProgressRow
+            v-for="c in collectors"
+            :key="c.name"
+            :name="c.name"
+            :collected="c.collected"
+            :target="c.target"
+            :transactions="c.transactions"
+            :zone="c.zone"
+          />
+          <div class="target-note">
+            <strong>Target:</strong>
+            {{ formatTZS(totals.monthly_target) }} total ·
+            {{ formatTZS(1200000) }} per collector
+          </div>
         </div>
+        <div v-else class="empty-state">No collector data available.</div>
       </div>
     </div>
 
-    <!-- Schedule row -->
-    <div class="section-title">This Week's Schedule</div>
-    <div class="row-3">
-      <ScheduleCard
-        v-for="sched in weekSchedule"
-        :key="sched.dayLabel"
-        v-bind="sched"
-      />
+    <!-- ── This week's schedule ───────────────────────────────────────── -->
+    <div v-if="weekSchedule.length" class="section-block">
+      <div class="section-head">
+        <span class="section-title">This Week's Collection Schedule</span>
+        <Link href="/schedule" class="see-all">Manage schedules →</Link>
+      </div>
+      <div class="row-3">
+        <ScheduleCard
+          v-for="sched in weekSchedule"
+          :key="sched.dayLabel"
+          v-bind="sched"
+        />
+      </div>
+    </div>
+
+    <!-- ── Bottom stats: active clients, collection rate ─────────────── -->
+    <div class="bottom-stats">
+      <div class="bs-item">
+        <span class="bs-label">Active Clients</span>
+        <span class="bs-val">{{ totals.active_clients.toLocaleString() }}</span>
+        <span class="bs-sub">of {{ totals.total_clients }} registered</span>
+      </div>
+      <div class="bs-item">
+        <span class="bs-label">Collection Rate</span>
+        <span class="bs-val" :class="rateColor">{{ stats.collection_rate }}%</span>
+        <div class="rate-bar">
+          <div class="rate-fill" :style="{ width: Math.min(stats.collection_rate, 100) + '%' }"
+               :class="rateColor" />
+        </div>
+      </div>
+      <div class="bs-item">
+        <span class="bs-label">Monthly Target</span>
+        <span class="bs-val">{{ formatTZS(totals.monthly_target) }}</span>
+        <span class="bs-sub">{{ collectors.length }} active collectors</span>
+      </div>
     </div>
 
   </AppLayout>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { ref, computed, watch } from 'vue'
+import { Link, router, usePage } from '@inertiajs/vue3'
 import { Bar, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   ArcElement, Tooltip, Legend,
 } from 'chart.js'
 
-import AppLayout           from '@/Layouts/AppLayout.vue'
-import StatCard            from '@/Components/StatCard.vue'
-import AlertBanner         from '@/Components/AlertBanner.vue'
-import TransactionRow      from '@/Components/TransactionRow.vue'
+import AppLayout            from '@/Layouts/AppLayout.vue'
+import StatCard             from '@/Components/StatCard.vue'
+import AlertBanner          from '@/Components/AlertBanner.vue'
+import TransactionRow       from '@/Components/TransactionRow.vue'
 import CollectorProgressRow from '@/Components/CollectorProgressRow.vue'
-import ScheduleCard        from '@/Components/ScheduleCard.vue'
+import ScheduleCard         from '@/Components/ScheduleCard.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
-// Props from Inertia (Laravel controller passes these)
+// ─── Props from Inertia controller ───────────────────────────────────────────
 const props = defineProps({
+  period:      { type: String, default: 'monthly' },
+  periodLabel: { type: String, default: '' },
+
   stats: {
     type: Object,
     default: () => ({
-      total_collected: 1005000, total_transactions: 119,
-      total_outstanding: 342000, total_penalties: 48000,
-      clients_unpaid: 12, collection_rate: 74.6,
+      total_collected: 0, total_transactions: 0,
+      total_outstanding: 0, total_penalties: 0,
+      clients_unpaid: 0, collection_rate: 0,
+      collected_change: 0, tx_change: 0,
     }),
   },
-  recentTransactions: {
-    type: Array,
-    default: () => [
-      { payerName: 'ANOLD KED MON', controlNumber: '5260000007045', amount: 3000,  status: 'paid',      paidAt: '2026-05-15T16:28:00' },
-      { payerName: 'KIZENGA',       controlNumber: '5260000007046', amount: 6000,  status: 'paid',      paidAt: '2026-05-15T16:40:00' },
-      { payerName: 'SHEMEJI',       controlNumber: '5260000007044', amount: 6000,  status: 'paid',      paidAt: '2026-05-15T15:59:00' },
-      { payerName: 'ELIANLS',       controlNumber: '5260000007049', amount: 6000,  status: 'paid',      paidAt: '2026-05-15T17:32:00' },
-      { payerName: 'JASHUA',        controlNumber: '5260000007048', amount: 6000,  status: 'partial',   paidAt: '2026-05-15T16:58:00' },
-      { payerName: null,            controlNumber: '5260000007050', amount: 3000,  status: 'unmatched', paidAt: '2026-05-15T17:37:00' },
-    ],
+
+  chartData: {
+    type: Object,
+    default: () => ({ labels: [], amounts: [], counts: [] }),
   },
-  collectors: {
+
+  bandData: {
     type: Array,
-    default: () => [
-      { name: 'Sarah Shechambo', collected: 1005000, transactions: 119, zone: 'Zone A–F' },
-      { name: 'John Mwangi',     collected: 630000,  transactions: 84,  zone: 'Zone G–J' },
-      { name: 'Fatuma Makame',   collected: 290000,  transactions: 41,  zone: 'Zone K–L' },
-    ],
+    default: () => [],
   },
-  weekSchedule: {
-    type: Array,
-    default: () => [
-      { dayLabel: 'Monday · Week 21',    zoneName: 'Zone A — Kariakoo', zoneColor: '#4caf76', staffName: 'Sarah Shechambo', clientCount: 47 },
-      { dayLabel: 'Tuesday · Week 21',   zoneName: 'Zone B — Ilala',    zoneColor: '#f5c842', staffName: 'John Mwangi',     clientCount: 32 },
-      { dayLabel: 'Wednesday · Week 21', zoneName: 'Zone C — Temeke',   zoneColor: '#c0392b', staffName: 'Fatuma Makame',   clientCount: 29 },
-    ],
+
+  recentTransactions: { type: Array, default: () => [] },
+  collectors:         { type: Array, default: () => [] },
+  weekSchedule:       { type: Array, default: () => [] },
+
+  totals: {
+    type: Object,
+    default: () => ({ active_clients: 0, total_clients: 0, monthly_target: 0 }),
   },
 })
 
-// Tabs
+// ─── Period switching ─────────────────────────────────────────────────────────
+const activePeriod = ref(props.period)
+const loading      = ref(false)
+
 const tabs = [
   { key: 'monthly', label: 'Monthly' },
-  { key: 'weekly',  label: 'Weekly' },
-  { key: 'yearly',  label: 'Yearly' },
+  { key: 'weekly',  label: 'Weekly'  },
+  { key: 'yearly',  label: 'Yearly'  },
 ]
-const activeTab = ref('monthly')
 
-// Formatting
-const formatTZS = (v) =>
-  new Intl.NumberFormat('sw-TZ', {
-    style: 'currency', currency: 'TZS', minimumFractionDigits: 0,
-  }).format(v)
+function switchPeriod(period) {
+  if (period === activePeriod.value) return
+  activePeriod.value = period
+  loading.value      = true
 
-// Chart data
-const trendChartData = {
-  labels: ['May 1','May 3','May 5','May 7','May 9','May 11','May 13','May 15'],
-  datasets: [{
-    label: 'Collected (TZS)',
-    data: [42000, 78000, 55000, 120000, 95000, 185000, 165000, 265000],
-    backgroundColor: '#4caf76',
-    borderRadius: 4,
-    borderSkipped: false,
-  }],
+  router.get('/dashboard', { period }, {
+    preserveScroll: true,
+    preserveState:  false,
+    onFinish: () => { loading.value = false },
+  })
 }
+
+// ─── Export URL ───────────────────────────────────────────────────────────────
+const exportUrl = computed(() => {
+  const now = new Date()
+  return `/dashboard/export-monthly?month=${now.getMonth() + 1}&year=${now.getFullYear()}`
+})
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+const trendReady = computed(() =>
+  (props.chartData?.amounts ?? []).some(v => v > 0)
+)
+
+const bandReady = computed(() =>
+  (props.bandData ?? []).some(b => b.count > 0)
+)
+
+const trendChartData = computed(() => ({
+  labels: props.chartData?.labels ?? [],
+  datasets: [{
+    label:           'Collected (TZS)',
+    data:            props.chartData?.amounts ?? [],
+    backgroundColor: '#4caf76',
+    borderRadius:    4,
+    borderSkipped:   false,
+  }],
+}))
+
 const trendChartOptions = {
-  responsive: true, maintainAspectRatio: false,
+  responsive: true,
+  maintainAspectRatio: false,
   plugins: {
     legend: { display: false },
-    tooltip: { callbacks: { label: ctx => 'TZS ' + ctx.parsed.y.toLocaleString() } },
+    tooltip: {
+      callbacks: {
+        label: ctx => 'TZS ' + ctx.parsed.y.toLocaleString(),
+      },
+    },
   },
   scales: {
-    x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#7a9489', font: { size: 10 } }, border: { display: false } },
-    y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#7a9489', font: { size: 10 }, callback: v => v >= 1000 ? (v/1000)+'k' : v }, border: { display: false } },
+    x: {
+      grid:   { color: 'rgba(0,0,0,0.04)' },
+      ticks:  { color: '#7a9489', font: { size: 10 }, maxTicksLimit: 12 },
+      border: { display: false },
+    },
+    y: {
+      grid:   { color: 'rgba(0,0,0,0.04)' },
+      ticks:  {
+        color: '#7a9489', font: { size: 10 },
+        callback: v => v >= 1000000 ? (v / 1000000).toFixed(1) + 'M'
+                     : v >= 1000   ? (v / 1000) + 'k'
+                     : v,
+      },
+      border: { display: false },
+    },
   },
 }
 
-const bandChartData = {
-  labels: ['3,000 TZS', '6,000 TZS', 'High value (>10k)'],
+const bandColors = ['#1a4d32', '#2d7a50', '#4caf76', '#f5c842', '#e67e22']
+
+const bandChartData = computed(() => ({
+  labels: (props.bandData ?? []).map(b => b.label),
+  counts: (props.bandData ?? []).map(b => b.count),
+}))
+
+const doughnutData = computed(() => ({
+  labels: bandChartData.value.labels,
   datasets: [{
-    data: [45, 38, 17],
-    backgroundColor: ['#2d7a50', '#4caf76', '#f5c842'],
-    borderWidth: 0,
-    hoverOffset: 4,
+    data:            bandChartData.value.counts,
+    backgroundColor: bandColors,
+    borderWidth:     0,
+    hoverOffset:     4,
   }],
-}
-const bandChartOptions = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + '%' } } },
+}))
+
+const doughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
   cutout: '65%',
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: ctx => {
+          const band = props.bandData?.[ctx.dataIndex]
+          return `${ctx.label}: ${ctx.parsed} transactions (${band?.percent ?? 0}%)`
+        },
+      },
+    },
+  },
 }
 
-const bandLegend = [
-  { label: '3,000',      color: '#2d7a50' },
-  { label: '6,000',      color: '#4caf76' },
-  { label: 'High value', color: '#f5c842' },
-]
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const formatTZS = v =>
+  new Intl.NumberFormat('sw-TZ', { minimumFractionDigits: 0 }).format(v ?? 0)
+
+const changeLabel = (pct, suffix) => {
+  if (pct === null || pct === undefined) return suffix
+  const sign = pct >= 0 ? '+' : ''
+  return `${sign}${pct}% ${suffix}`
+}
+
+const rateColor = computed(() => {
+  const r = props.stats.collection_rate ?? 0
+  if (r >= 80) return 'green'
+  if (r >= 50) return 'amber'
+  return 'red'
+})
 </script>
 
 <style scoped>
-.alert-link { color: #2d7a50; text-decoration: underline; cursor: pointer; }
-
+/* Top row: tabs + label */
+.top-row {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap;
+}
 .tab-bar {
   display: flex; gap: 2px; background: #f0faf3;
-  border: 1px solid rgba(0,0,0,0.08); border-radius: 8px;
-  padding: 3px; width: fit-content; margin-bottom: 16px;
+  border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 3px;
 }
 .tab {
-  padding: 5px 14px; border-radius: 6px; font-size: 12px;
+  padding: 5px 16px; border-radius: 6px; font-size: 12px;
   cursor: pointer; color: #4a6357; background: none; border: none;
-  transition: all 0.15s;
+  transition: all 0.15s; display: flex; align-items: center; gap: 5px;
 }
-.tab--active { background: #ffffff; color: #1a2e24; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.tab:disabled { cursor: wait; opacity: 0.7; }
+.tab--active  { background: #ffffff; color: #1a2e24; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.tab-spinner  {
+  width: 10px; height: 10px; border: 2px solid rgba(0,0,0,0.15);
+  border-top-color: #4caf76; border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.period-label { font-size: 12px; color: #7a9489; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+/* KPI grid */
+.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px; }
 
+/* Quick actions */
 .quick-actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .qa-btn {
-  background: #ffffff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px;
+  background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px;
   padding: 8px 12px; font-size: 11px; color: #4a6357; cursor: pointer;
   display: flex; align-items: center; gap: 6px; text-decoration: none;
-  transition: all 0.15s;
+  transition: all 0.15s; white-space: nowrap;
 }
 .qa-btn:hover { border-color: #4caf76; color: #2d7a50; }
-
-.row-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 16px; }
-.row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-
-.card {
-  background: #ffffff; border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 10px; padding: 16px;
+.qa-btn--primary { background: #f0faf3; border-color: #a8ddb8; color: #2d7a50; font-weight: 500; }
+.qa-btn--primary:hover { background: #2d7a50; color: #fff; }
+.qa-badge {
+  background: #c0392b; color: #fff; font-size: 9px;
+  padding: 1px 5px; border-radius: 8px; font-weight: 600;
 }
+.qa-count {
+  background: #f0faf3; color: #2d7a50; font-size: 9px;
+  padding: 1px 5px; border-radius: 8px;
+}
+
+/* Layout rows */
+.row-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 16px; }
+.row-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+
+/* Cards */
+.card {
+  background: #fff; border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px; padding: 16px; position: relative;
+}
+.card--loading { opacity: 0.6; pointer-events: none; }
 .card-head {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
 }
 .card-title { font-size: 13px; font-weight: 600; color: #1a2e24; }
+.period-inline { color: #4caf76; }
 .see-all { font-size: 11px; color: #4caf76; text-decoration: none; }
 .see-all:hover { text-decoration: underline; }
 
+/* Charts */
 .chart-wrap     { height: 180px; position: relative; }
 .chart-wrap--sm { height: 150px; }
-
-.band-legend {
-  display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+.chart-placeholder {
+  height: 100%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: #7a9489; background: #f8faf9; border-radius: 6px;
 }
-.legend-item {
-  display: flex; align-items: center; gap: 4px; font-size: 10px; color: #4a6357;
-}
-.legend-dot { width: 8px; height: 8px; border-radius: 2px; }
 
+/* Band legend */
+.band-legend { display: flex; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #4a6357; }
+.legend-dot  { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+/* Band total (overlaid centre text) */
+.band-total {
+  text-align: center; margin-top: -120px; position: relative;
+  pointer-events: none;
+}
+.bt-val   { font-size: 18px; font-weight: 600; color: #1a2e24; }
+.bt-label { font-size: 10px; color: #7a9489; }
+
+/* Target note */
 .target-note {
   background: #f0faf3; border: 1px solid #a8ddb8;
   border-radius: 8px; padding: 10px 12px;
   font-size: 11px; color: #2d7a50; margin-top: 12px;
 }
 
-.section-title { font-size: 13px; font-weight: 600; color: #1a2e24; margin-bottom: 10px; }
+/* Section block */
+.section-block { margin-bottom: 16px; }
+.section-head  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.section-title { font-size: 13px; font-weight: 600; color: #1a2e24; }
 
-@media (max-width: 1024px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .row-2    { grid-template-columns: 1fr; }
-  .row-3    { grid-template-columns: 1fr; }
+/* Empty state */
+.empty-state { font-size: 12px; color: #7a9489; padding: 20px 0; text-align: center; }
+.link { color: #4caf76; text-decoration: underline; }
+
+/* Alert link */
+.alert-link { color: #2d7a50; text-decoration: underline; cursor: pointer; margin-left: 4px; }
+
+/* Bottom stats */
+.bottom-stats {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px;
+}
+.bs-item {
+  background: #fff; border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px; padding: 14px 16px;
+}
+.bs-label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #7a9489; margin-bottom: 4px; }
+.bs-val   { display: block; font-size: 20px; font-weight: 600; color: #1a2e24; margin-bottom: 4px; }
+.bs-sub   { font-size: 10px; color: #7a9489; }
+.bs-val.green { color: #2d7a50; }
+.bs-val.amber { color: #b88a00; }
+.bs-val.red   { color: #c0392b; }
+.rate-bar {
+  height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px;
+  overflow: hidden; margin-top: 6px;
+}
+.rate-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+.rate-fill.green { background: #4caf76; }
+.rate-fill.amber { background: #f5c842; }
+.rate-fill.red   { background: #c0392b; }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .kpi-grid     { grid-template-columns: repeat(2,1fr); }
+  .row-2        { grid-template-columns: 1fr; }
+  .row-3        { grid-template-columns: repeat(2,1fr); }
+  .bottom-stats { grid-template-columns: 1fr; }
+  .band-total   { display: none; }
+}
+@media (max-width: 640px) {
+  .row-3 { grid-template-columns: 1fr; }
+  .quick-actions .qa-btn span.qa-count,
+  .quick-actions .qa-btn span.qa-badge { display: none; }
 }
 </style>

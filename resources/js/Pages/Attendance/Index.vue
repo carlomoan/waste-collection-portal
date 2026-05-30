@@ -25,23 +25,23 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Present</div>
-          <div class="summary-value">14</div>
-          <div class="summary-change summary-change--positive">78% attendance rate</div>
+          <div class="summary-value">{{ presentCount }}</div>
+          <div class="summary-change summary-change--positive">{{ ((presentCount / staff.length) * 100).toFixed(0) }}% attendance rate</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Absent</div>
-          <div class="summary-value">2</div>
-          <div class="summary-change summary-change--negative">1 sick, 1 leave</div>
+          <div class="summary-value">{{ absentCount }}</div>
+          <div class="summary-change summary-change--negative">Not present today</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Late</div>
-          <div class="summary-value">2</div>
+          <div class="summary-value">{{ lateCount }}</div>
           <div class="summary-change summary-change--neutral">Arrived after 8:00 AM</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">On Leave</div>
-          <div class="summary-value">0</div>
-          <div class="summary-change summary-change--neutral">No approved leave</div>
+          <div class="summary-value">{{ onLeaveCount }}</div>
+          <div class="summary-change summary-change--neutral">Approved leave</div>
         </div>
       </div>
 
@@ -100,90 +100,25 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr v-for="attendance in todayAttendance" :key="attendance.id">
               <td>
                 <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--sarah">SS</div>
+                  <div class="staff-avatar">{{ initials(attendance.staff_name) }}</div>
                   <div class="staff-details">
-                    <div class="staff-name">Sarah Shechambo</div>
-                    <div class="staff-id">STF-001</div>
+                    <div class="staff-name">{{ attendance.staff_name }}</div>
+                    <div class="staff-id">STF-{{ attendance.staff_id }}</div>
                   </div>
                 </div>
               </td>
               <td>Collector</td>
-              <td>07:45 AM</td>
-              <td>05:15 PM</td>
-              <td>9.5h</td>
-              <td><span class="status-badge status-badge--present">Present</span></td>
-              <td><button class="table-action">View</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--john">JM</div>
-                  <div class="staff-details">
-                    <div class="staff-name">John Mwangi</div>
-                    <div class="staff-id">STF-002</div>
-                  </div>
-                </div>
-              </td>
-              <td>Collector</td>
-              <td>08:15 AM</td>
-              <td>05:00 PM</td>
-              <td>8.75h</td>
-              <td><span class="status-badge status-badge--late">Late</span></td>
-              <td><button class="table-action">View</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--ali">AH</div>
-                  <div class="staff-details">
-                    <div class="staff-name">Ali Hassan</div>
-                    <div class="staff-id">STF-004</div>
-                  </div>
-                </div>
-              </td>
-              <td>Driver</td>
-              <td>07:30 AM</td>
-              <td>05:30 PM</td>
-              <td>10h</td>
-              <td><span class="status-badge status-badge--present">Present</span></td>
-              <td><button class="table-action">View</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--mary">MK</div>
-                  <div class="staff-details">
-                    <div class="staff-name">Mary Kileo</div>
-                    <div class="staff-id">STF-005</div>
-                  </div>
-                </div>
-              </td>
-              <td>Admin</td>
+              <td>{{ attendance.clock_in }}</td>
+              <td>{{ attendance.clock_out }}</td>
               <td>-</td>
-              <td>-</td>
-              <td>-</td>
-              <td><span class="status-badge status-badge--absent">Absent</span></td>
-              <td><button class="table-action">Mark</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-avatar staff-avatar--fatuma">FM</div>
-                  <div class="staff-details">
-                    <div class="staff-name">Fatuma Makame</div>
-                    <div class="staff-id">STF-003</div>
-                  </div>
-                </div>
-              </td>
-              <td>Collector</td>
-              <td>08:30 AM</td>
-              <td>05:00 PM</td>
-              <td>8.5h</td>
-              <td><span class="status-badge status-badge--late">Late</span></td>
+              <td><span class="status-badge" :class="`status-badge--${attendance.status}`">{{ attendance.status }}</span></td>
               <td><button class="table-action">View</button></td>
+            </tr>
+            <tr v-if="todayAttendance.length === 0">
+              <td colspan="7" style="text-align: center; color: #4a6357;">No attendance records found</td>
             </tr>
           </tbody>
         </table>
@@ -252,9 +187,25 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
-const currentDate = ref(new Date())
+const props = defineProps({
+  staff: {
+    type: Array,
+    default: () => []
+  },
+  todayAttendance: {
+    type: Array,
+    default: () => []
+  },
+  date: {
+    type: String,
+    default: null
+  }
+})
+
+const currentDate = ref(props.date ? new Date(props.date) : new Date())
 
 const currentDateFormatted = computed(() => {
   return currentDate.value.toLocaleDateString('en-TZ', {
@@ -264,6 +215,16 @@ const currentDateFormatted = computed(() => {
     day: 'numeric',
   })
 })
+
+const presentCount = computed(() => props.todayAttendance.filter(a => a.status === 'present').length)
+const absentCount = computed(() => props.todayAttendance.filter(a => a.status === 'absent').length)
+const lateCount = computed(() => props.todayAttendance.filter(a => a.status === 'late').length)
+const onLeaveCount = computed(() => props.todayAttendance.filter(a => a.status === 'leave').length)
+
+const initials = (name) => {
+  if (!name) return '??'
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
 
 const previousDay = () => {
   currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() - 1))

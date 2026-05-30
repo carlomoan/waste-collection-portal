@@ -8,15 +8,15 @@
 
       <!-- Settings Navigation -->
       <div class="settings-nav">
-        <button class="nav-btn nav-btn--active">General</button>
-        <button class="nav-btn">Billing</button>
-        <button class="nav-btn">Notifications</button>
-        <button class="nav-btn">Security</button>
-        <button class="nav-btn">Integrations</button>
+        <button class="nav-btn" :class="{ 'nav-btn--active': activeTab === 'general' }" @click="setActiveTab('general')">General</button>
+        <button class="nav-btn" :class="{ 'nav-btn--active': activeTab === 'billing' }" @click="setActiveTab('billing')">Billing</button>
+        <button class="nav-btn" :class="{ 'nav-btn--active': activeTab === 'notifications' }" @click="setActiveTab('notifications')">Notifications</button>
+        <button class="nav-btn" :class="{ 'nav-btn--active': activeTab === 'security' }" @click="setActiveTab('security')">Security</button>
+        <button class="nav-btn" :class="{ 'nav-btn--active': activeTab === 'integrations' }" @click="setActiveTab('integrations')">Integrations</button>
       </div>
 
       <!-- General Settings -->
-      <div class="settings-section">
+      <div class="settings-section" v-show="activeTab === 'general'">
         <div class="section-header">
           <h3>General Settings</h3>
           <button class="action-btn action-btn--primary">Save Changes</button>
@@ -25,41 +25,41 @@
         <div class="settings-form">
           <div class="form-group">
             <label>Company Name</label>
-            <input type="text" class="form-input" value="Waste Collection Portal">
+            <input type="text" class="form-input" v-model="form.general.company_name">
           </div>
           <div class="form-group">
             <label>Business Email</label>
-            <input type="email" class="form-input" value="admin@wastecollection.co.tz">
+            <input type="email" class="form-input" v-model="form.general.email">
           </div>
           <div class="form-group">
             <label>Phone Number</label>
-            <input type="tel" class="form-input" value="+255 712 345 678">
+            <input type="tel" class="form-input" v-model="form.general.phone">
           </div>
           <div class="form-group">
             <label>Address</label>
-            <textarea class="form-input" rows="3">Dar es Salaam, Tanzania</textarea>
+            <textarea class="form-input" rows="3" v-model="form.general.address"></textarea>
           </div>
           <div class="form-group">
             <label>Timezone</label>
-            <select class="form-input">
-              <option>Africa/Dar es Salaam</option>
-              <option>Africa/Nairobi</option>
-              <option>UTC</option>
+            <select class="form-input" v-model="form.general.timezone">
+              <option value="Africa/Dar_es_Salaam">Africa/Dar es Salaam</option>
+              <option value="Africa/Nairobi">Africa/Nairobi</option>
+              <option value="UTC">UTC</option>
             </select>
           </div>
           <div class="form-group">
             <label>Currency</label>
-            <select class="form-input">
-              <option>Tanzanian Shilling (TZS)</option>
-              <option>US Dollar (USD)</option>
-              <option>Euro (EUR)</option>
+            <select class="form-input" v-model="form.general.currency">
+              <option value="TZS">Tanzanian Shilling (TZS)</option>
+              <option value="USD">US Dollar (USD)</option>
+              <option value="EUR">Euro (EUR)</option>
             </select>
           </div>
         </div>
       </div>
 
       <!-- Billing Settings -->
-      <div class="settings-section">
+      <div class="settings-section" v-show="activeTab === 'billing'">
         <div class="section-header">
           <h3>Billing Settings</h3>
           <button class="action-btn action-btn--primary">Save Changes</button>
@@ -68,29 +68,29 @@
         <div class="settings-form">
           <div class="form-group">
             <label>Default Monthly Fee</label>
-            <input type="text" class="form-input" value="15,000 TZS">
+            <input type="text" class="form-input" v-model="form.billing.default_monthly_fee">
           </div>
           <div class="form-group">
             <label>Payment Due Days</label>
-            <input type="number" class="form-input" value="30">
+            <input type="number" class="form-input" v-model="form.billing.payment_due_days">
           </div>
           <div class="form-group">
             <label>Late Fee Percentage</label>
-            <input type="number" class="form-input" value="10" step="0.5">
+            <input type="number" class="form-input" v-model="form.billing.late_fee_percentage" step="0.5">
           </div>
           <div class="form-group">
             <label>Tax Rate (%)</label>
-            <input type="number" class="form-input" value="18" step="0.1">
+            <input type="number" class="form-input" v-model="form.billing.tax_rate" step="0.1">
           </div>
           <div class="form-group">
             <label>Invoice Prefix</label>
-            <input type="text" class="form-input" value="INV-">
+            <input type="text" class="form-input" v-model="form.billing.invoice_prefix">
           </div>
         </div>
       </div>
 
       <!-- Notification Settings -->
-      <div class="settings-section">
+      <div class="settings-section" v-show="activeTab === 'notifications'">
         <div class="section-header">
           <h3>Notification Settings</h3>
           <button class="action-btn action-btn--primary">Save Changes</button>
@@ -103,7 +103,7 @@
               <div class="toggle-description">Receive email alerts for important events</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" checked>
+              <input type="checkbox" v-model="form.notifications.email_enabled">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -113,7 +113,7 @@
               <div class="toggle-description">Receive SMS alerts for critical events</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" checked>
+              <input type="checkbox" v-model="form.notifications.sms_enabled">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -123,7 +123,7 @@
               <div class="toggle-description">Automatically send payment reminders to clients</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" checked>
+              <input type="checkbox" v-model="form.notifications.payment_reminders">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -133,7 +133,7 @@
               <div class="toggle-description">Notify when collections are completed</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox">
+              <input type="checkbox" v-model="form.notifications.collection_alerts">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -143,7 +143,7 @@
               <div class="toggle-description">Receive notifications about system updates</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" checked>
+              <input type="checkbox" v-model="form.notifications.system_updates">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -151,7 +151,7 @@
       </div>
 
       <!-- Security Settings -->
-      <div class="settings-section">
+      <div class="settings-section" v-show="activeTab === 'security'">
         <div class="section-header">
           <h3>Security Settings</h3>
           <button class="action-btn action-btn--primary">Save Changes</button>
@@ -168,7 +168,7 @@
               <div class="toggle-description">Require 2FA for all admin accounts</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" checked>
+              <input type="checkbox" v-model="form.security.two_factor_auth">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -178,7 +178,7 @@
               <div class="toggle-description">Restrict access to specific IP addresses</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox">
+              <input type="checkbox" v-model="form.security.ip_whitelist">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -188,7 +188,7 @@
               <div class="toggle-description">Log all user activities for security review</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" checked>
+              <input type="checkbox" v-model="form.security.audit_logging">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -196,7 +196,7 @@
       </div>
 
       <!-- Danger Zone -->
-      <div class="danger-section">
+      <div class="danger-section" v-show="activeTab === 'security'">
         <div class="section-header">
           <h3>Danger Zone</h3>
         </div>
@@ -222,7 +222,57 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+
+const activeTab = ref('general')
+const setActiveTab = (tab) => { activeTab.value = tab }
+
+const props = defineProps({
+  settings: {
+    type: Object,
+    default: () => ({})
+  }
+})
+
+const form = useForm({
+  general: {
+    company_name: props.settings.general?.company_name || '',
+    email: props.settings.general?.email || '',
+    phone: props.settings.general?.phone || '',
+    address: props.settings.general?.address || '',
+    timezone: props.settings.general?.timezone || 'Africa/Dar_es_Salaam',
+    currency: props.settings.general?.currency || 'TZS',
+  },
+  billing: {
+    default_monthly_fee: props.settings.billing?.default_monthly_fee || '',
+    payment_due_days: props.settings.billing?.payment_due_days || 30,
+    late_fee_percentage: props.settings.billing?.late_fee_percentage || 10,
+    tax_rate: props.settings.billing?.tax_rate || 18,
+    invoice_prefix: props.settings.billing?.invoice_prefix || 'INV-',
+  },
+  notifications: {
+    email_enabled: props.settings.notifications?.email_enabled ?? true,
+    sms_enabled: props.settings.notifications?.sms_enabled ?? true,
+    payment_reminders: props.settings.notifications?.payment_reminders ?? true,
+    collection_alerts: props.settings.notifications?.collection_alerts ?? false,
+    system_updates: props.settings.notifications?.system_updates ?? true,
+  },
+  security: {
+    two_factor_auth: props.settings.security?.two_factor_auth ?? true,
+    ip_whitelist: props.settings.security?.ip_whitelist ?? false,
+    audit_logging: props.settings.security?.audit_logging ?? true,
+  }
+})
+
+const saveSettings = (section) => {
+  form.put(route('settings.update'), {
+    onSuccess: () => {
+      // Handle success
+    }
+  })
+}
 </script>
 
 <style scoped>

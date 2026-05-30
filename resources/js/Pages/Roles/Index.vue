@@ -10,22 +10,22 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Roles</div>
-          <div class="summary-value">5</div>
+          <div class="summary-value">{{ totalRoles }}</div>
           <div class="summary-change summary-change--neutral">All configured</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Active Users</div>
-          <div class="summary-value">18</div>
+          <div class="summary-value">{{ totalUsers }}</div>
           <div class="summary-change summary-change--positive">Assigned to roles</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Permissions</div>
-          <div class="summary-value">32</div>
+          <div class="summary-value">{{ totalPermissions }}</div>
           <div class="summary-change summary-change--neutral">Across all modules</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Custom Roles</div>
-          <div class="summary-value">2</div>
+          <div class="summary-value">{{ customRolesCount }}</div>
           <div class="summary-change summary-change--positive">User-defined</div>
         </div>
       </div>
@@ -53,7 +53,7 @@
           <button class="view-all-btn">View All Permissions</button>
         </div>
         <div class="roles-grid">
-          <div class="role-card">
+          <div v-for="role in roles" :key="role.id" class="role-card">
             <div class="role-header">
               <div class="role-icon role-icon--admin">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
@@ -61,112 +61,21 @@
                 </svg>
               </div>
               <div class="role-info">
-                <div class="role-name">Administrator</div>
-                <div class="role-users">3 users</div>
+                <div class="role-name">{{ role.name }}</div>
+                <div class="role-users">{{ role.users_count }} users</div>
               </div>
             </div>
-            <div class="role-description">Full system access with all permissions</div>
+            <div class="role-description">{{ role.description }}</div>
             <div class="role-permissions">
-              <span class="permission-tag">All Access</span>
-              <span class="permission-tag">User Management</span>
-              <span class="permission-tag">Settings</span>
+              <span v-for="permission in role.permissions" :key="permission" class="permission-tag">{{ permission }}</span>
             </div>
             <div class="role-actions">
-              <button class="role-action">View</button>
-              <button class="role-action">Edit</button>
+              <Link :href="route('roles.show', role.id)" class="role-action">View</Link>
+              <Link :href="route('roles.edit', role.id)" class="role-action">Edit</Link>
             </div>
           </div>
-          <div class="role-card">
-            <div class="role-header">
-              <div class="role-icon role-icon--manager">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
-                </svg>
-              </div>
-              <div class="role-info">
-                <div class="role-name">Manager</div>
-                <div class="role-users">4 users</div>
-              </div>
-            </div>
-            <div class="role-description">Manage operations and view reports</div>
-            <div class="role-permissions">
-              <span class="permission-tag">Operations</span>
-              <span class="permission-tag">Reports</span>
-              <span class="permission-tag">Staff</span>
-            </div>
-            <div class="role-actions">
-              <button class="role-action">View</button>
-              <button class="role-action">Edit</button>
-            </div>
-          </div>
-          <div class="role-card">
-            <div class="role-header">
-              <div class="role-icon role-icon--finance">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
-                </svg>
-              </div>
-              <div class="role-info">
-                <div class="role-name">Finance</div>
-                <div class="role-users">2 users</div>
-              </div>
-            </div>
-            <div class="role-description">Handle payments, expenses, and banking</div>
-            <div class="role-permissions">
-              <span class="permission-tag">Transactions</span>
-              <span class="permission-tag">Expenses</span>
-              <span class="permission-tag">Banking</span>
-            </div>
-            <div class="role-actions">
-              <button class="role-action">View</button>
-              <button class="role-action">Edit</button>
-            </div>
-          </div>
-          <div class="role-card">
-            <div class="role-header">
-              <div class="role-icon role-icon--collector">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/>
-                </svg>
-              </div>
-              <div class="role-info">
-                <div class="role-name">Collector</div>
-                <div class="role-users">8 users</div>
-              </div>
-            </div>
-            <div class="role-description">Field operations and client interactions</div>
-            <div class="role-permissions">
-              <span class="permission-tag">Collections</span>
-              <span class="permission-tag">Clients</span>
-              <span class="permission-tag">Schedule</span>
-            </div>
-            <div class="role-actions">
-              <button class="role-action">View</button>
-              <button class="role-action">Edit</button>
-            </div>
-          </div>
-          <div class="role-card">
-            <div class="role-header">
-              <div class="role-icon role-icon--viewer">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
-                </svg>
-              </div>
-              <div class="role-info">
-                <div class="role-name">Viewer</div>
-                <div class="role-users">1 user</div>
-              </div>
-            </div>
-            <div class="role-description">Read-only access to reports and data</div>
-            <div class="role-permissions">
-              <span class="permission-tag">View Only</span>
-              <span class="permission-tag">Reports</span>
-            </div>
-            <div class="role-actions">
-              <button class="role-action">View</button>
-              <button class="role-action">Edit</button>
-            </div>
+          <div v-if="roles.length === 0" style="grid-column: 1/-1; text-align: center; color: #4a6357; padding: 40px;">
+            No roles found
           </div>
         </div>
       </div>
@@ -274,7 +183,21 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+
+const props = defineProps({
+  roles: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const totalRoles = computed(() => props.roles.length)
+const totalUsers = computed(() => props.roles.reduce((sum, role) => sum + (role.users_count || 0), 0))
+const totalPermissions = computed(() => props.roles.reduce((sum, role) => sum + (role.permissions?.length || 0), 0))
+const customRolesCount = computed(() => props.roles.filter(r => r.name !== 'admin' && r.name !== 'manager' && r.name !== 'collector').length)
 </script>
 
 <style scoped>

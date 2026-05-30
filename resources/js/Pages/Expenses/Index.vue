@@ -89,37 +89,16 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>{{ formatDate('2026-05-25') }}</td>
-              <td>Fuel for Collection Truck</td>
-              <td>Fuel</td>
-              <td>{{ formatCurrency(45000) }}</td>
-              <td><span class="status-badge status-badge--approved">Approved</span></td>
+            <tr v-for="expense in recentExpenses" :key="expense.id">
+              <td>{{ formatDate(expense.date) }}</td>
+              <td>{{ expense.description }}</td>
+              <td>{{ expense.category }}</td>
+              <td>{{ formatCurrency(expense.amount) }}</td>
+              <td><span class="status-badge" :class="`status-badge--${expense.status}`">{{ expense.status }}</span></td>
               <td><button class="table-action">View</button></td>
             </tr>
-            <tr>
-              <td>{{ formatDate('2026-05-24') }}</td>
-              <td>Vehicle Maintenance - Oil Change</td>
-              <td>Maintenance</td>
-              <td>{{ formatCurrency(85000) }}</td>
-              <td><span class="status-badge status-badge--pending">Pending</span></td>
-              <td><button class="table-action">Approve</button></td>
-            </tr>
-            <tr>
-              <td>{{ formatDate('2026-05-23') }}</td>
-              <td>Office Supplies - Paper & Ink</td>
-              <td>Office</td>
-              <td>{{ formatCurrency(35000) }}</td>
-              <td><span class="status-badge status-badge--approved">Approved</span></td>
-              <td><button class="table-action">View</button></td>
-            </tr>
-            <tr>
-              <td>{{ formatDate('2026-05-22') }}</td>
-              <td>Staff Overtime Payment</td>
-              <td>Salaries</td>
-              <td>{{ formatCurrency(120000) }}</td>
-              <td><span class="status-badge status-badge--approved">Approved</span></td>
-              <td><button class="table-action">View</button></td>
+            <tr v-if="recentExpenses.length === 0">
+              <td colspan="6" style="text-align: center; color: #4a6357;">No expenses found</td>
             </tr>
           </tbody>
         </table>

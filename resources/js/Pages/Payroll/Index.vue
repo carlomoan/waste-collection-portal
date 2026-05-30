@@ -25,34 +25,34 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Payroll</div>
-          <div class="summary-value">{{ formatCurrency(4850000) }}</div>
+          <div class="summary-value">{{ formatCurrency(totalPayroll) }}</div>
           <div class="summary-change summary-change--neutral">For {{ currentMonthYear }}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Paid</div>
-          <div class="summary-value">{{ formatCurrency(3200000) }}</div>
-          <div class="summary-change summary-change--positive">12 staff members paid</div>
+          <div class="summary-value">{{ formatCurrency(paidAmount) }}</div>
+          <div class="summary-change summary-change--positive">{{ paidCount }} staff members paid</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Pending</div>
-          <div class="summary-value">{{ formatCurrency(1650000) }}</div>
-          <div class="summary-change summary-change--neutral">6 staff pending payment</div>
+          <div class="summary-value">{{ formatCurrency(pendingAmount) }}</div>
+          <div class="summary-change summary-change--neutral">{{ pendingCount }} staff pending payment</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Overtime</div>
-          <div class="summary-value">{{ formatCurrency(450000) }}</div>
-          <div class="summary-change summary-change--positive">+{{ formatCurrency(85000) }} vs last month</div>
+          <div class="summary-label">Total Staff</div>
+          <div class="summary-value">{{ staff.length }}</div>
+          <div class="summary-change summary-change--positive">Active collectors</div>
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div class="actions-bar">
-        <button class="action-btn action-btn--primary">
+        <Link :href="route('payroll.generate')" class="action-btn action-btn--primary">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
           </svg>
           Generate Payroll
-        </button>
+        </Link>
         <button class="action-btn">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -95,80 +95,23 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr v-for="payment in salaryPayments" :key="payment.id">
               <td>
                 <div class="staff-info">
-                  <div class="staff-name">Sarah Shechambo</div>
-                  <div class="staff-id">STF-001</div>
+                  <div class="staff-name">{{ payment.staff_name }}</div>
+                  <div class="staff-id">STF-{{ payment.id }}</div>
                 </div>
               </td>
               <td>Collector</td>
-              <td>{{ formatCurrency(350000) }}</td>
-              <td>{{ formatCurrency(45000) }}</td>
-              <td>{{ formatCurrency(15000) }}</td>
-              <td>{{ formatCurrency(380000) }}</td>
-              <td><span class="status-badge status-badge--paid">Paid</span></td>
+              <td>{{ formatCurrency(payment.base_salary) }}</td>
+              <td>{{ formatCurrency(payment.commissions) }}</td>
+              <td>{{ formatCurrency(payment.deductions) }}</td>
+              <td>{{ formatCurrency(payment.net_salary) }}</td>
+              <td><span class="status-badge" :class="`status-badge--${payment.status}`">{{ payment.status }}</span></td>
               <td><button class="table-action">View</button></td>
             </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-name">John Mwangi</div>
-                  <div class="staff-id">STF-002</div>
-                </div>
-              </td>
-              <td>Collector</td>
-              <td>{{ formatCurrency(350000) }}</td>
-              <td>{{ formatCurrency(32000) }}</td>
-              <td>{{ formatCurrency(12000) }}</td>
-              <td>{{ formatCurrency(370000) }}</td>
-              <td><span class="status-badge status-badge--paid">Paid</span></td>
-              <td><button class="table-action">View</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-name">Fatuma Makame</div>
-                  <div class="staff-id">STF-003</div>
-                </div>
-              </td>
-              <td>Collector</td>
-              <td>{{ formatCurrency(350000) }}</td>
-              <td>{{ formatCurrency(28000) }}</td>
-              <td>{{ formatCurrency(10000) }}</td>
-              <td>{{ formatCurrency(368000) }}</td>
-              <td><span class="status-badge status-badge--pending">Pending</span></td>
-              <td><button class="table-action">Pay</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-name">Ali Hassan</div>
-                  <div class="staff-id">STF-004</div>
-                </div>
-              </td>
-              <td>Driver</td>
-              <td>{{ formatCurrency(400000) }}</td>
-              <td>{{ formatCurrency(55000) }}</td>
-              <td>{{ formatCurrency(20000) }}</td>
-              <td>{{ formatCurrency(435000) }}</td>
-              <td><span class="status-badge status-badge--paid">Paid</span></td>
-              <td><button class="table-action">View</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="staff-info">
-                  <div class="staff-name">Mary Kileo</div>
-                  <div class="staff-id">STF-005</div>
-                </div>
-              </td>
-              <td>Admin</td>
-              <td>{{ formatCurrency(450000) }}</td>
-              <td>{{ formatCurrency(0) }}</td>
-              <td>{{ formatCurrency(25000) }}</td>
-              <td>{{ formatCurrency(425000) }}</td>
-              <td><span class="status-badge status-badge--pending">Pending</span></td>
-              <td><button class="table-action">Pay</button></td>
+            <tr v-if="salaryPayments.length === 0">
+              <td colspan="8" style="text-align: center; color: #4a6357;">No payroll data found</td>
             </tr>
           </tbody>
         </table>
@@ -202,9 +145,29 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
-const currentDate = ref(new Date())
+const props = defineProps({
+  staff: {
+    type: Array,
+    default: () => []
+  },
+  salaryPayments: {
+    type: Array,
+    default: () => []
+  },
+  month: {
+    type: Number,
+    default: null
+  },
+  year: {
+    type: Number,
+    default: null
+  }
+})
+
+const currentDate = ref(new Date(props.year || new Date().getFullYear(), (props.month || new Date().getMonth() + 1) - 1))
 
 const currentMonthYear = computed(() => {
   return currentDate.value.toLocaleDateString('en-TZ', {
@@ -220,6 +183,30 @@ const previousMonth = () => {
 const nextMonth = () => {
   currentDate.value = new Date(currentDate.value.setMonth(currentDate.value.getMonth() + 1))
 }
+
+const totalPayroll = computed(() => {
+  return props.salaryPayments.reduce((sum, payment) => sum + (payment.net_salary || 0), 0)
+})
+
+const paidAmount = computed(() => {
+  return props.salaryPayments
+    .filter(p => p.status === 'paid')
+    .reduce((sum, payment) => sum + (payment.net_salary || 0), 0)
+})
+
+const pendingAmount = computed(() => {
+  return props.salaryPayments
+    .filter(p => p.status === 'pending')
+    .reduce((sum, payment) => sum + (payment.net_salary || 0), 0)
+})
+
+const paidCount = computed(() => {
+  return props.salaryPayments.filter(p => p.status === 'paid').length
+})
+
+const pendingCount = computed(() => {
+  return props.salaryPayments.filter(p => p.status === 'pending').length
+})
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('sw-TZ', {

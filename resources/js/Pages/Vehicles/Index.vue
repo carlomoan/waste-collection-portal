@@ -38,18 +38,8 @@
           </svg>
           Add Vehicle
         </button>
-        <button class="action-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/>
-          </svg>
-          Log Maintenance
-        </button>
-        <button class="action-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
-          </svg>
-          Export Report
-        </button>
+        <button class="action-btn" @click="showMaintenanceModal = true">Log Maintenance</button>
+        <button class="action-btn" @click="exportReport">Export Report</button>
       </div>
 
       <!-- Vehicle List -->
@@ -171,6 +161,94 @@
         </button>
       </template>
     </Modal>
+
+    <!-- Add Vehicle Modal -->
+    <Modal :show="showAddModal" @close="showAddModal = false" title="Add Vehicle">
+      <form @submit.prevent="addVehicle">
+        <div class="form-group">
+          <label>Plate Number</label>
+          <input type="text" v-model="addForm.plate_number" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Vehicle Type</label>
+          <select v-model="addForm.type" class="form-input" required>
+            <option value="">Select type</option>
+            <option value="truck">Truck</option>
+            <option value="van">Van</option>
+            <option value="pickup">Pickup</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Driver</label>
+          <input type="text" v-model="addForm.driver" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select v-model="addForm.status" class="form-input">
+            <option value="active">Active</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fuel Level (%)</label>
+          <input type="number" v-model="addForm.fuel_level" class="form-input" min="0" max="100">
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" v-model="addForm.is_hired"> Hired Vehicle</label>
+        </div>
+        <div v-if="addForm.is_hired" class="form-group">
+          <label>Hire End Date</label>
+          <input type="date" v-model="addForm.hire_end_date" class="form-input">
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showAddModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="addVehicle" :disabled="addForm.processing">
+          {{ addForm.processing ? 'Adding...' : 'Add Vehicle' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Maintenance Modal -->
+    <Modal :show="showMaintenanceModal" @close="showMaintenanceModal = false" title="Log Maintenance">
+      <form @submit.prevent="submitMaintenance">
+        <div class="form-group">
+          <label>Vehicle</label>
+          <select v-model="maintenanceForm.vehicle_id" class="form-input" required>
+            <option value="">Select vehicle</option>
+            <option v-for="v in vehicles" :key="v.id" :value="v.id">{{ v.plate_number }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Maintenance Type</label>
+          <select v-model="maintenanceForm.maintenance_type" class="form-input" required>
+            <option value="">Select type</option>
+            <option value="routine">Routine Service</option>
+            <option value="repair">Repair</option>
+            <option value="inspection">Inspection</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Scheduled Date</label>
+          <input type="date" v-model="maintenanceForm.scheduled_date" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea v-model="maintenanceForm.description" class="form-input" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Estimated Cost (TZS)</label>
+          <input type="number" v-model="maintenanceForm.estimated_cost" class="form-input">
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showMaintenanceModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="submitMaintenance" :disabled="maintenanceForm.processing">
+          {{ maintenanceForm.processing ? 'Submitting...' : 'Schedule Maintenance' }}
+        </button>
+      </template>
+    </Modal>
   </AppLayout>
 </template>
 
@@ -192,8 +270,49 @@ const props = defineProps({
 })
 
 const showAddModal = ref(false)
+const showMaintenanceModal = ref(false)
 const showDeleteModal = ref(false)
 const vehicleToDelete = ref(null)
+
+const addForm = useForm({
+  plate_number: '',
+  type: '',
+  driver: '',
+  status: 'active',
+  fuel_level: 100,
+  is_hired: false,
+  hire_end_date: ''
+})
+
+const maintenanceForm = useForm({
+  vehicle_id: '',
+  maintenance_type: '',
+  scheduled_date: '',
+  description: '',
+  estimated_cost: ''
+})
+
+const exportReport = () => {
+  window.location.href = '/vehicles/export'
+}
+
+const addVehicle = () => {
+  addForm.post('/vehicles', {
+    onSuccess: () => {
+      showAddModal.value = false
+      addForm.reset()
+    }
+  })
+}
+
+const submitMaintenance = () => {
+  maintenanceForm.post('/maintenance', {
+    onSuccess: () => {
+      showMaintenanceModal.value = false
+      maintenanceForm.reset()
+    }
+  })
+}
 
 const activeVehiclesCount = computed(() => {
   return props.vehicles.filter(v => v.status === 'active').length
@@ -377,6 +496,57 @@ const formatDate = (date) => {
   font-size: 12px;
   color: #4a6357;
   background: white;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2e24;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a2e24;
+  background: white;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf76;
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.modal-btn--cancel {
+  background: #f5f5f5;
+  color: #4a6357;
+}
+
+.modal-btn--primary {
+  background: #4caf76;
+  color: white;
+}
+
+.modal-btn--danger {
+  background: #c0392b;
+  color: white;
 }
 
 .view-all-btn {

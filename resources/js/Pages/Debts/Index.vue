@@ -101,6 +101,32 @@
       </div>
     </div>
 
+    <!-- Apply Penalties Modal -->
+    <Modal :show="showPenaltyModal" @close="showPenaltyModal = false" title="Apply Penalties">
+      <form @submit.prevent="submitPenalties">
+        <div class="form-group">
+          <label>Penalty Percentage (%)</label>
+          <input type="number" v-model="penaltyForm.penalty_percentage" class="form-input" min="0" max="100" required>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" v-model="penaltyForm.apply_to_all"> Apply to all overdue invoices
+          </label>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea v-model="penaltyForm.notes" class="form-input" rows="3" placeholder="Optional notes..."></textarea>
+        </div>
+        <p class="penalty-warning">This will apply penalty fees to {{ overdueCount }} overdue invoices.</p>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showPenaltyModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--danger" @click="submitPenalties" :disabled="penaltyForm.processing">
+          {{ penaltyForm.processing ? 'Applying...' : 'Apply Penalties' }}
+        </button>
+      </template>
+    </Modal>
+
   </AppLayout>
 </template>
 
@@ -110,6 +136,8 @@ import { Link, router } from '@inertiajs/vue3'
 import AppLayout   from '@/Layouts/AppLayout.vue'
 import AlertBanner from '@/Components/AlertBanner.vue'
 import StatCard    from '@/Components/StatCard.vue'
+import Modal       from '@/Components/Modal.vue'
+import { useForm } from '@inertiajs/vue3'
 
 const props = defineProps({
   debts:  { type: Array,  default: () => [] },
@@ -121,6 +149,13 @@ const filterStatus = ref('')
 const filterMonth  = ref('')
 const currentPage  = ref(1)
 const perPage      = 20
+const showPenaltyModal = ref(false)
+
+const penaltyForm = useForm({
+  penalty_percentage: 10,
+  apply_to_all: true,
+  notes: ''
+})
 
 const filteredDebts = computed(() => props.debts.filter(d => {
   const q = search.value.toLowerCase()
@@ -141,7 +176,19 @@ const isOverdue  = d => new Date(d) < new Date()
 const initials   = n => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 const statusLabel = s => ({ active: 'Active', penalized: 'Penalized', partially_paid: 'Partial', settled: 'Settled' }[s] ?? s)
 
-const applyPenalties = () => router.post(route('debts.apply-penalties'), {}, { preserveScroll: true })
+const applyPenalties = () => {
+  showPenaltyModal.value = true
+}
+
+const submitPenalties = () => {
+  penaltyForm.post(route('debts.apply-penalties'), {
+    onSuccess: () => {
+      showPenaltyModal.value = false
+      penaltyForm.reset()
+    }
+  })
+}
+
 const exportDebts    = () => window.location.href = route('debts.export')
 const recordPartial  = (debt) => router.visit(route('payments.create', { invoice_id: debt.invoice_id }))
 </script>
@@ -160,6 +207,23 @@ const recordPartial  = (debt) => router.visit(route('payments.create', { invoice
 .search-input:focus { outline: none; border-color: #4caf76; }
 .filter-select { padding: 7px 10px; border: 1px solid rgba(0,0,0,0.12); border-radius: 7px; font-size: 12px; background: #fff; }
 .export-btn { padding: 7px 12px; border: 1px solid rgba(0,0,0,0.12); border-radius: 7px; font-size: 11px; color: #4a6357; background: #fff; cursor: pointer; }
+
+/* Form Styles */
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: #1a2e24; }
+.form-input {
+  width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 6px; font-size: 13px; color: #1a2e24; background: white;
+}
+.form-input:focus { outline: none; border-color: #4caf76; }
+.modal-btn {
+  padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none;
+}
+.modal-btn--cancel { background: #f5f5f5; color: #4a6357; }
+.modal-btn--primary { background: #4caf76; color: white; }
+.modal-btn--danger { background: #c0392b; color: white; }
+.penalty-warning { color: #c0392b; font-size: 12px; margin-top: 12px; }
 
 .card { background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; overflow: hidden; }
 .debts-table { width: 100%; border-collapse: collapse; font-size: 12px; }

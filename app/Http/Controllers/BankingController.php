@@ -53,7 +53,12 @@ class BankingController extends Controller
                 'recentDeposits' => $recentDeposits,
             ]);
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load banking data: ' . $e->getMessage());
+            \Log::error('Banking error: ' . $e->getMessage());
+            return Inertia::render('Banking/Index', [
+                'bankAccounts' => [],
+                'recentDeposits' => [],
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
