@@ -95,47 +95,14 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>Monthly Revenue Report - May 2026</td>
-              <td>Revenue</td>
-              <td>May 2026</td>
-              <td>{{ formatDate('2026-05-25') }}</td>
-              <td>2.4 MB</td>
+            <tr v-for="report in recentReports" :key="report.id">
+              <td>{{ report.name }}</td>
+              <td>{{ report.type }}</td>
+              <td>{{ report.period }}</td>
+              <td>{{ formatDate(report.generated_at) }}</td>
+              <td>{{ report.size }}</td>
               <td>
-                <button class="table-action">Download</button>
-                <button class="table-action">View</button>
-              </td>
-            </tr>
-            <tr>
-              <td>Collection Performance - Q2 2026</td>
-              <td>Collection</td>
-              <td>Apr - Jun 2026</td>
-              <td>{{ formatDate('2026-05-20') }}</td>
-              <td>3.1 MB</td>
-              <td>
-                <button class="table-action">Download</button>
-                <button class="table-action">View</button>
-              </td>
-            </tr>
-            <tr>
-              <td>Staff Performance Report - May 2026</td>
-              <td>Staff</td>
-              <td>May 2026</td>
-              <td>{{ formatDate('2026-05-18') }}</td>
-              <td>1.8 MB</td>
-              <td>
-                <button class="table-action">Download</button>
-                <button class="table-action">View</button>
-              </td>
-            </tr>
-            <tr>
-              <td>Financial Summary - April 2026</td>
-              <td>Financial</td>
-              <td>April 2026</td>
-              <td>{{ formatDate('2026-05-01') }}</td>
-              <td>2.7 MB</td>
-              <td>
-                <button class="table-action">Download</button>
+                <button class="table-action" @click="downloadReport(report.id)">Download</button>
                 <button class="table-action">View</button>
               </td>
             </tr>
@@ -147,7 +114,7 @@
       <div class="scheduled-section">
         <div class="section-header">
           <h3>Scheduled Reports</h3>
-          <button class="action-btn action-btn--primary">
+          <button class="action-btn action-btn--primary" @click="showScheduleModal = true">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
             </svg>
@@ -155,88 +122,131 @@
           </button>
         </div>
         <div class="scheduled-grid">
-          <div class="scheduled-card">
+          <div class="scheduled-card" v-for="report in scheduledReports" :key="report.id">
             <div class="scheduled-header">
-              <div class="scheduled-name">Monthly Revenue</div>
-              <div class="scheduled-badge scheduled-badge--active">Active</div>
+              <div class="scheduled-name">{{ report.name }}</div>
+              <div class="scheduled-badge" :class="report.status === 'active' ? 'scheduled-badge--active' : 'scheduled-badge--inactive'">
+                {{ report.status === 'active' ? 'Active' : 'Paused' }}
+              </div>
             </div>
             <div class="scheduled-details">
               <div class="scheduled-detail">
                 <span class="detail-label">Frequency:</span>
-                <span class="detail-value">Monthly</span>
+                <span class="detail-value">{{ report.frequency }}</span>
               </div>
               <div class="scheduled-detail">
                 <span class="detail-label">Next Run:</span>
-                <span class="detail-value">Jun 1, 2026</span>
+                <span class="detail-value">{{ report.next_run }}</span>
               </div>
               <div class="scheduled-detail">
                 <span class="detail-label">Recipients:</span>
-                <span class="detail-value">3 emails</span>
+                <span class="detail-value">{{ report.recipients }}</span>
               </div>
             </div>
             <div class="scheduled-actions">
-              <button class="scheduled-action">Edit</button>
-              <button class="scheduled-action scheduled-action--danger">Disable</button>
+              <button class="scheduled-action" @click="sendNow(report)">Send Now</button>
+              <button class="scheduled-action" @click="editSchedule(report)">Edit</button>
+              <button class="scheduled-action" :class="report.status === 'active' ? 'scheduled-action--danger' : ''" @click="toggleSchedule(report)">
+                {{ report.status === 'active' ? 'Disable' : 'Enable' }}
+              </button>
             </div>
           </div>
-          <div class="scheduled-card">
-            <div class="scheduled-header">
-              <div class="scheduled-name">Weekly Collection</div>
-              <div class="scheduled-badge scheduled-badge--active">Active</div>
-            </div>
-            <div class="scheduled-details">
-              <div class="scheduled-detail">
-                <span class="detail-label">Frequency:</span>
-                <span class="detail-value">Weekly</span>
-              </div>
-              <div class="scheduled-detail">
-                <span class="detail-label">Next Run:</span>
-                <span class="detail-value">Jun 1, 2026</span>
-              </div>
-              <div class="scheduled-detail">
-                <span class="detail-label">Recipients:</span>
-                <span class="detail-value">5 emails</span>
-              </div>
-            </div>
-            <div class="scheduled-actions">
-              <button class="scheduled-action">Edit</button>
-              <button class="scheduled-action scheduled-action--danger">Disable</button>
+        </div>
+      </div>
+
+      <!-- Monthly Comparison -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <h3>Monthly Comparison</h3>
+          <div class="comparison-controls">
+            <select v-model="comparisonMonth1" class="filter-select">
+              <option v-for="m in months" :key="m.value" :value="m.value">{{ m.label }}</option>
+            </select>
+            <span class="vs-label">vs</span>
+            <select v-model="comparisonMonth2" class="filter-select">
+              <option v-for="m in months" :key="m.value" :value="m.value">{{ m.label }}</option>
+            </select>
+            <button class="compare-btn" @click="generateComparison">Compare</button>
+          </div>
+        </div>
+        <div class="comparison-grid">
+          <div class="comparison-card">
+            <div class="comparison-title">Revenue</div>
+            <div class="comparison-value">{{ formatCurrency(comparisonData.revenue_diff) }}</div>
+            <div class="comparison-change" :class="comparisonData.revenue_diff >= 0 ? 'positive' : 'negative'">
+              {{ comparisonData.revenue_percent >= 0 ? '+' : '' }}{{ comparisonData.revenue_percent }}%
             </div>
           </div>
-          <div class="scheduled-card">
-            <div class="scheduled-header">
-              <div class="scheduled-name">Quarterly Financial</div>
-              <div class="scheduled-badge scheduled-badge--inactive">Paused</div>
+          <div class="comparison-card">
+            <div class="comparison-title">Collections</div>
+            <div class="comparison-value">{{ comparisonData.collections_diff }}</div>
+            <div class="comparison-change" :class="comparisonData.collections_diff >= 0 ? 'positive' : 'negative'">
+              {{ comparisonData.collections_percent >= 0 ? '+' : '' }}{{ comparisonData.collections_percent }}%
             </div>
-            <div class="scheduled-details">
-              <div class="scheduled-detail">
-                <span class="detail-label">Frequency:</span>
-                <span class="detail-value">Quarterly</span>
-              </div>
-              <div class="scheduled-detail">
-                <span class="detail-label">Next Run:</span>
-                <span class="detail-value">-</span>
-              </div>
-              <div class="scheduled-detail">
-                <span class="detail-label">Recipients:</span>
-                <span class="detail-value">2 emails</span>
-              </div>
-            </div>
-            <div class="scheduled-actions">
-              <button class="scheduled-action">Edit</button>
-              <button class="scheduled-action">Enable</button>
+          </div>
+          <div class="comparison-card">
+            <div class="comparison-title">Expenses</div>
+            <div class="comparison-value">{{ formatCurrency(comparisonData.expenses_diff) }}</div>
+            <div class="comparison-change" :class="comparisonData.expenses_diff <= 0 ? 'positive' : 'negative'">
+              {{ comparisonData.expenses_percent >= 0 ? '+' : '' }}{{ comparisonData.expenses_percent }}%
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Schedule Report Modal -->
+    <Modal :show="showScheduleModal" title="Schedule Report" @close="showScheduleModal = false">
+      <form @submit.prevent="submitSchedule">
+        <div class="form-group">
+          <label>Report Name</label>
+          <input type="text" v-model="scheduleForm.name" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Report Type</label>
+          <select v-model="scheduleForm.type" class="form-input" required>
+            <option value="revenue">Revenue Report</option>
+            <option value="collection">Collection Report</option>
+            <option value="staff">Staff Report</option>
+            <option value="financial">Financial Report</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Frequency</label>
+          <select v-model="scheduleForm.frequency" class="form-input" required>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Recipients (comma-separated emails)</label>
+          <input type="text" v-model="scheduleForm.recipients" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Format</label>
+          <select v-model="scheduleForm.format" class="form-input" required>
+            <option value="pdf">PDF</option>
+            <option value="excel">Excel</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+      </form>
+      <template #footer>
+        <button class="btn-secondary" @click="showScheduleModal = false">Cancel</button>
+        <button class="btn-primary" @click="submitSchedule" :disabled="scheduleForm.processing">
+          {{ scheduleForm.processing ? 'Scheduling...' : 'Schedule Report' }}
+        </button>
+      </template>
+    </Modal>
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { router } from '@inertiajs/vue3'
+import { router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
 
 const props = defineProps({
   clients: {
@@ -252,6 +262,14 @@ const props = defineProps({
     default: () => []
   },
   zones: {
+    type: Array,
+    default: () => []
+  },
+  recentReports: {
+    type: Array,
+    default: () => []
+  },
+  scheduledReports: {
     type: Array,
     default: () => []
   },
@@ -276,6 +294,25 @@ const props = defineProps({
 const selectedReportType = ref(props.selectedReportType || 'revenue')
 const selectedMonth = ref(props.month || new Date().getMonth() + 1)
 const selectedYear = ref(props.year || new Date().getFullYear())
+const showScheduleModal = ref(false)
+const comparisonMonth1 = ref(new Date().getMonth())
+const comparisonMonth2 = ref(new Date().getMonth() - 1)
+const comparisonData = ref({
+  revenue_diff: 0,
+  revenue_percent: 0,
+  collections_diff: 0,
+  collections_percent: 0,
+  expenses_diff: 0,
+  expenses_percent: 0,
+})
+
+const scheduleForm = useForm({
+  name: '',
+  type: 'revenue',
+  frequency: 'monthly',
+  recipients: '',
+  format: 'pdf'
+})
 
 const formatDate = (date) => {
   if (!date) return 'N/A'
@@ -299,6 +336,56 @@ const generateReport = () => {
     type: selectedReportType.value,
     month: selectedMonth.value,
     year: selectedYear.value,
+  })
+}
+
+const downloadReport = (reportId) => {
+  window.location.href = `/reports/download/${reportId}`
+}
+
+const submitSchedule = () => {
+  scheduleForm.post('/reports/schedule', {
+    onSuccess: () => {
+      showScheduleModal.value = false
+      scheduleForm.reset()
+    }
+  })
+}
+
+const sendNow = (report) => {
+  router.post(`/reports/${report.id}/send-now`, {}, {
+    onSuccess: () => {
+      alert('Report sent successfully')
+    }
+  })
+}
+
+const editSchedule = (report) => {
+  scheduleForm.name = report.name
+  scheduleForm.type = report.type
+  scheduleForm.frequency = report.frequency
+  scheduleForm.recipients = report.recipients
+  scheduleForm.format = report.format
+  showScheduleModal.value = true
+}
+
+const toggleSchedule = (report) => {
+  router.patch(`/reports/${report.id}/toggle`, {}, {
+    onSuccess: () => {
+      // Refresh the page to update the list
+      router.reload()
+    }
+  })
+}
+
+const generateComparison = () => {
+  router.get('/reports/monthly-comparison', {
+    month1: comparisonMonth1.value,
+    month2: comparisonMonth2.value,
+  }, {
+    onSuccess: (page) => {
+      comparisonData.value = page.props.comparisonData
+    }
   })
 }
 </script>
@@ -655,6 +742,139 @@ const generateReport = () => {
 .scheduled-action--danger:hover {
   border-color: #c62828;
   color: #b71c1c;
+}
+
+.comparison-section {
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.comparison-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vs-label {
+  font-size: 12px;
+  color: #4a6357;
+  font-weight: 500;
+}
+
+.compare-btn {
+  padding: 8px 16px;
+  background: #4caf76;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.compare-btn:hover {
+  background: #2d7a50;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.comparison-card {
+  background: #f9fafb;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.comparison-title {
+  font-size: 12px;
+  color: #4a6357;
+  margin-bottom: 8px;
+}
+
+.comparison-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a2e24;
+  margin-bottom: 4px;
+}
+
+.comparison-change {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.comparison-change.positive {
+  color: #2d7a50;
+}
+
+.comparison-change.negative {
+  color: #c62828;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4a6357;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a2e24;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf76;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #4a6357;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-secondary:hover {
+  border-color: #4caf76;
+  color: #2d7a50;
+}
+
+.btn-primary {
+  padding: 8px 16px;
+  background: #4caf76;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover {
+  background: #2d7a50;
 }
 
 @media (max-width: 1024px) {

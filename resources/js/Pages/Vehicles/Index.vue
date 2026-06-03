@@ -38,7 +38,8 @@
           </svg>
           Add Vehicle
         </button>
-        <button class="action-btn" @click="showMaintenanceModal = true">Log Maintenance</button>
+        <button class="action-btn" @click="showMaintenanceModal = true">Schedule Maintenance</button>
+        <button class="action-btn" @click="showFuelModal = true">Add Fuel Log</button>
         <button class="action-btn" @click="exportReport">Export Report</button>
       </div>
 
@@ -99,7 +100,7 @@
       <div class="maintenance-section">
         <div class="section-header">
           <h3>Upcoming Maintenance</h3>
-          <button class="action-btn action-btn--primary">
+          <button class="action-btn action-btn--primary" @click="showMaintenanceModal = true">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
             </svg>
@@ -119,32 +120,20 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>TRK-003</td>
-              <td>Oil Change</td>
-              <td>{{ formatDate('2026-05-28') }}</td>
-              <td>Routine oil change and filter replacement</td>
-              <td>{{ formatCurrency(85000) }}</td>
-              <td><span class="status-badge status-badge--pending">Pending</span></td>
-              <td><button class="table-action">Complete</button></td>
+            <tr v-for="maintenance in maintenanceSchedule" :key="maintenance.id">
+              <td>{{ maintenance.plate_number }}</td>
+              <td>{{ maintenance.maintenance_type }}</td>
+              <td>{{ formatDate(maintenance.scheduled_date) }}</td>
+              <td>{{ maintenance.description }}</td>
+              <td>{{ formatCurrency(maintenance.estimated_cost) }}</td>
+              <td><span class="status-badge" :class="`status-badge--${maintenance.status}`">{{ maintenance.status }}</span></td>
+              <td>
+                <button v-if="maintenance.status === 'pending'" class="table-action" @click="showCompleteMaintenanceModal(maintenance)">Complete</button>
+                <button v-else class="table-action">View</button>
+              </td>
             </tr>
-            <tr>
-              <td>TRK-001</td>
-              <td>Tire Service</td>
-              <td>{{ formatDate('2026-06-05') }}</td>
-              <td>Tire rotation and alignment check</td>
-              <td>{{ formatCurrency(120000) }}</td>
-              <td><span class="status-badge status-badge--scheduled">Scheduled</span></td>
-              <td><button class="table-action">View</button></td>
-            </tr>
-            <tr>
-              <td>PKP-002</td>
-              <td>Brake Inspection</td>
-              <td>{{ formatDate('2026-06-10') }}</td>
-              <td>Brake pads and fluid check</td>
-              <td>{{ formatCurrency(95000) }}</td>
-              <td><span class="status-badge status-badge--scheduled">Scheduled</span></td>
-              <td><button class="table-action">View</button></td>
+            <tr v-if="maintenanceSchedule.length === 0">
+              <td colspan="7" style="text-align: center; padding: 20px;">No scheduled maintenance</td>
             </tr>
           </tbody>
         </table>
@@ -180,7 +169,10 @@
         </div>
         <div class="form-group">
           <label>Driver</label>
-          <input type="text" v-model="addForm.driver" class="form-input">
+          <select v-model="addForm.driver_id" class="form-input">
+            <option value="">Select driver</option>
+            <option v-for="driver in drivers" :key="driver.id" :value="driver.id">{{ driver.name }}</option>
+          </select>
         </div>
         <div class="form-group">
           <label>Status</label>
@@ -198,8 +190,28 @@
           <label><input type="checkbox" v-model="addForm.is_hired"> Hired Vehicle</label>
         </div>
         <div v-if="addForm.is_hired" class="form-group">
+          <label>Payment Type</label>
+          <select v-model="addForm.payment_type" class="form-input" required>
+            <option value="">Select payment type</option>
+            <option value="per_trip">Per Trip</option>
+            <option value="per_day">Per Day</option>
+          </select>
+        </div>
+        <div v-if="addForm.is_hired" class="form-group">
+          <label>Hire Fee (TZS)</label>
+          <input type="number" v-model="addForm.hire_fee" class="form-input" required>
+        </div>
+        <div v-if="addForm.is_hired" class="form-group">
+          <label>Hire Start Date</label>
+          <input type="date" v-model="addForm.hire_start_date" class="form-input">
+        </div>
+        <div v-if="addForm.is_hired" class="form-group">
           <label>Hire End Date</label>
           <input type="date" v-model="addForm.hire_end_date" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea v-model="addForm.notes" class="form-input" rows="2"></textarea>
         </div>
       </form>
       <template #footer>
@@ -211,7 +223,7 @@
     </Modal>
 
     <!-- Maintenance Modal -->
-    <Modal :show="showMaintenanceModal" @close="showMaintenanceModal = false" title="Log Maintenance">
+    <Modal :show="showMaintenanceModal" @close="showMaintenanceModal = false" title="Schedule Maintenance">
       <form @submit.prevent="submitMaintenance">
         <div class="form-group">
           <label>Vehicle</label>
@@ -222,11 +234,13 @@
         </div>
         <div class="form-group">
           <label>Maintenance Type</label>
-          <select v-model="maintenanceForm.maintenance_type" class="form-input" required>
+          <select v-model="maintenanceForm.type" class="form-input" required>
             <option value="">Select type</option>
-            <option value="routine">Routine Service</option>
-            <option value="repair">Repair</option>
-            <option value="inspection">Inspection</option>
+            <option value="oil_change">Oil Change</option>
+            <option value="tire_rotation">Tire Rotation</option>
+            <option value="engine_repair">Engine Repair</option>
+            <option value="general_service">General Service</option>
+            <option value="other">Other</option>
           </select>
         </div>
         <div class="form-group">
@@ -235,7 +249,7 @@
         </div>
         <div class="form-group">
           <label>Description</label>
-          <textarea v-model="maintenanceForm.description" class="form-input" rows="3"></textarea>
+          <textarea v-model="maintenanceForm.description" class="form-input" rows="3" required></textarea>
         </div>
         <div class="form-group">
           <label>Estimated Cost (TZS)</label>
@@ -246,6 +260,65 @@
         <button class="modal-btn modal-btn--cancel" @click="showMaintenanceModal = false">Cancel</button>
         <button class="modal-btn modal-btn--primary" @click="submitMaintenance" :disabled="maintenanceForm.processing">
           {{ maintenanceForm.processing ? 'Submitting...' : 'Schedule Maintenance' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Complete Maintenance Modal -->
+    <Modal :show="showCompleteModal" @close="showCompleteModal = false" title="Complete Maintenance">
+      <form @submit.prevent="completeMaintenance">
+        <div class="form-group">
+          <label>Actual Cost (TZS)</label>
+          <input type="number" v-model="completeForm.actual_cost" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea v-model="completeForm.notes" class="form-input" rows="3"></textarea>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showCompleteModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="completeMaintenance" :disabled="completeForm.processing">
+          {{ completeForm.processing ? 'Completing...' : 'Complete Maintenance' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Fuel Log Modal -->
+    <Modal :show="showFuelModal" @close="showFuelModal = false" title="Add Fuel Log">
+      <form @submit.prevent="addFuelLog">
+        <div class="form-group">
+          <label>Vehicle</label>
+          <select v-model="fuelForm.vehicle_id" class="form-input" required>
+            <option value="">Select vehicle</option>
+            <option v-for="v in vehicles" :key="v.id" :value="v.id">{{ v.plate_number }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Refill Date</label>
+          <input type="date" v-model="fuelForm.refill_date" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Liters</label>
+          <input type="number" v-model="fuelForm.liters" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Cost (TZS)</label>
+          <input type="number" v-model="fuelForm.cost" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Odometer (km)</label>
+          <input type="number" v-model="fuelForm.odometer_km" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea v-model="fuelForm.notes" class="form-input" rows="2"></textarea>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showFuelModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="addFuelLog" :disabled="fuelForm.processing">
+          {{ fuelForm.processing ? 'Adding...' : 'Add Fuel Log' }}
         </button>
       </template>
     </Modal>
@@ -266,34 +339,59 @@ const props = defineProps({
   maintenanceSchedule: {
     type: Array,
     default: () => []
+  },
+  drivers: {
+    type: Array,
+    default: () => []
   }
 })
 
 const showAddModal = ref(false)
 const showMaintenanceModal = ref(false)
+const showCompleteModal = ref(false)
+const showFuelModal = ref(false)
 const showDeleteModal = ref(false)
 const vehicleToDelete = ref(null)
+const maintenanceToComplete = ref(null)
 
 const addForm = useForm({
   plate_number: '',
   type: '',
-  driver: '',
+  driver_id: '',
   status: 'active',
   fuel_level: 100,
   is_hired: false,
-  hire_end_date: ''
+  payment_type: '',
+  hire_fee: '',
+  hire_start_date: '',
+  hire_end_date: '',
+  notes: ''
 })
 
 const maintenanceForm = useForm({
   vehicle_id: '',
-  maintenance_type: '',
+  type: '',
   scheduled_date: '',
   description: '',
   estimated_cost: ''
 })
 
+const completeForm = useForm({
+  actual_cost: '',
+  notes: ''
+})
+
+const fuelForm = useForm({
+  vehicle_id: '',
+  refill_date: '',
+  liters: '',
+  cost: '',
+  odometer_km: '',
+  notes: ''
+})
+
 const exportReport = () => {
-  window.location.href = '/vehicles/export'
+  window.location.href = '/vehicles/export?format=csv'
 }
 
 const addVehicle = () => {
@@ -306,10 +404,36 @@ const addVehicle = () => {
 }
 
 const submitMaintenance = () => {
-  maintenanceForm.post('/maintenance', {
+  maintenanceForm.post(`/vehicles/${maintenanceForm.vehicle_id}/maintenance`, {
     onSuccess: () => {
       showMaintenanceModal.value = false
       maintenanceForm.reset()
+    }
+  })
+}
+
+const showCompleteMaintenanceModal = (maintenance) => {
+  maintenanceToComplete.value = maintenance
+  showCompleteModal.value = true
+}
+
+const completeMaintenance = () => {
+  if (!maintenanceToComplete.value) return
+  
+  completeForm.patch(`/vehicles/maintenance/${maintenanceToComplete.value.id}/complete`, {
+    onSuccess: () => {
+      showCompleteModal.value = false
+      completeForm.reset()
+      maintenanceToComplete.value = null
+    }
+  })
+}
+
+const addFuelLog = () => {
+  fuelForm.post('/vehicles/fuel-log', {
+    onSuccess: () => {
+      showFuelModal.value = false
+      fuelForm.reset()
     }
   })
 }

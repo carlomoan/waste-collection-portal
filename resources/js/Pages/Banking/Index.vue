@@ -32,23 +32,35 @@
 
       <!-- Action Buttons -->
       <div class="actions-bar">
-        <button class="action-btn action-btn--primary" @click="navigateToNewDeposit">
+        <button class="action-btn action-btn--primary" @click="showAddDepositModal = true">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
           </svg>
           New Deposit
         </button>
-        <button class="action-btn">
+        <button class="action-btn" @click="showAddAccountModal = true">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+          </svg>
+          Add Bank Account
+        </button>
+        <button class="action-btn" @click="showStatementModal = true">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          Upload Statement
+        </button>
+        <button class="action-btn" @click="showCashPositionModal = true">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125z"/>
+          </svg>
+          Cash Position
+        </button>
+        <button class="action-btn" @click="exportStatement">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
           </svg>
           Export Statement
-        </button>
-        <button class="action-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/>
-          </svg>
-          Reconcile
         </button>
       </div>
 
@@ -59,7 +71,7 @@
           <div v-for="account in bankAccounts" :key="account.id" class="account-card">
             <div class="account-header">
               <div class="account-name">{{ account.bank_name }}</div>
-              <div class="account-balance">{{ formatCurrency(account.balance) }}</div>
+              <div class="account-balance">{{ formatCurrency(account.current_balance || account.balance) }}</div>
             </div>
             <div class="account-details">
               <div class="account-detail">
@@ -67,8 +79,12 @@
                 <span class="detail-value">{{ account.account_number }}</span>
               </div>
               <div class="account-detail">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value status--active">{{ account.status }}</span>
+                <span class="detail-label">Account Name:</span>
+                <span class="detail-value">{{ account.account_name }}</span>
+              </div>
+              <div class="account-detail">
+                <span class="detail-label">Currency:</span>
+                <span class="detail-value">{{ account.currency }}</span>
               </div>
             </div>
           </div>
@@ -102,7 +118,8 @@
               <td>{{ formatCurrency(deposit.amount) }}</td>
               <td>{{ deposit.reference }}</td>
               <td><span class="status-badge" :class="`status-badge--${deposit.status}`">{{ deposit.status }}</span></td>
-              <td>
+              <td class="td-actions">
+                <button v-if="deposit.status === 'pending'" class="table-action table-action--success" @click="reconcileDeposit(deposit)">Confirm</button>
                 <button class="table-action" @click="confirmDelete(deposit)">Delete</button>
               </td>
             </tr>
@@ -113,6 +130,141 @@
         </table>
       </div>
     </div>
+
+    <!-- Add Deposit Modal -->
+    <Modal :show="showAddDepositModal" @close="showAddDepositModal = false" title="New Deposit">
+      <form @submit.prevent="addDeposit">
+        <div class="form-group">
+          <label>Bank Account</label>
+          <select v-model="addDepositForm.bank_account_id" class="form-input" required>
+            <option value="">Select account</option>
+            <option v-for="account in bankAccounts" :key="account.id" :value="account.id">{{ account.bank_name }} - {{ account.account_number }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Amount</label>
+          <input type="number" v-model="addDepositForm.amount" class="form-input" min="0" step="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>Deposit Date</label>
+          <input type="date" v-model="addDepositForm.deposit_date" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Slip Image (Optional)</label>
+          <input type="file" ref="slipImage" class="form-input" accept=".jpg,.png,.pdf" />
+        </div>
+        <div class="form-group">
+          <label>Reference (Optional)</label>
+          <input type="text" v-model="addDepositForm.reference" class="form-input">
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showAddDepositModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="addDeposit" :disabled="addDepositForm.processing">
+          {{ addDepositForm.processing ? 'Adding...' : 'Add Deposit' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Add Bank Account Modal -->
+    <Modal :show="showAddAccountModal" @close="showAddAccountModal = false" title="Add Bank Account">
+      <form @submit.prevent="addBankAccount">
+        <div class="form-group">
+          <label>Bank Name</label>
+          <input type="text" v-model="addAccountForm.bank_name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Account Number</label>
+          <input type="text" v-model="addAccountForm.account_number" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Account Name</label>
+          <input type="text" v-model="addAccountForm.account_name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Opening Balance</label>
+          <input type="number" v-model="addAccountForm.opening_balance" class="form-input" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Currency</label>
+          <select v-model="addAccountForm.currency" class="form-input" required>
+            <option value="TZS">TZS - Tanzanian Shilling</option>
+            <option value="USD">USD - US Dollar</option>
+            <option value="EUR">EUR - Euro</option>
+          </select>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showAddAccountModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="addBankAccount" :disabled="addAccountForm.processing">
+          {{ addAccountForm.processing ? 'Adding...' : 'Add Account' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Upload Statement Modal -->
+    <Modal :show="showStatementModal" @close="showStatementModal = false" title="Upload Bank Statement">
+      <form @submit.prevent="uploadStatement">
+        <div class="form-group">
+          <label>Bank Account</label>
+          <select v-model="statementForm.bank_account_id" class="form-input" required>
+            <option value="">Select account</option>
+            <option v-for="account in bankAccounts" :key="account.id" :value="account.id">{{ account.bank_name }} - {{ account.account_number }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Statement File (CSV or PDF)</label>
+          <input type="file" ref="statementFile" class="form-input" accept=".csv,.pdf" required />
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showStatementModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="uploadStatement" :disabled="statementForm.processing">
+          {{ statementForm.processing ? 'Uploading...' : 'Upload & Reconcile' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Cash Position Modal -->
+    <Modal :show="showCashPositionModal" @close="showCashPositionModal = false" title="Daily Cash Position">
+      <div class="cash-position-content">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" v-model="cashPositionDate" class="form-input" @change="loadCashPosition" />
+        </div>
+        <div v-if="cashPositionData" class="cash-position-details">
+          <div class="cp-row">
+            <span class="cp-label">Cash Received</span>
+            <span class="cp-value cp-value--positive">{{ formatCurrency(cashPositionData.cash_received) }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-label">Cash Expenses</span>
+            <span class="cp-value cp-value--negative">{{ formatCurrency(cashPositionData.cash_expenses) }}</span>
+          </div>
+          <div class="cp-row cp-row--total">
+            <span class="cp-label">Net Cash</span>
+            <span class="cp-value">{{ formatCurrency(cashPositionData.net_cash) }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-label">Amount Banked</span>
+            <span class="cp-value">{{ formatCurrency(cashPositionData.amount_banked) }}</span>
+          </div>
+          <div class="cp-row cp-row--highlight">
+            <span class="cp-label">Cash in Hand</span>
+            <span class="cp-value cp-value--highlight">{{ formatCurrency(cashPositionData.cash_in_hand) }}</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showCashPositionModal = false">Close</button>
+        <button class="modal-btn modal-btn--primary" @click="exportCashPosition">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:4px">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          Export PDF
+        </button>
+      </template>
+    </Modal>
 
     <!-- Delete Confirmation Modal -->
     <Modal :show="showDeleteModal" @close="showDeleteModal = false" title="Delete Deposit">
@@ -141,12 +293,40 @@ const props = defineProps({
   recentDeposits: {
     type: Array,
     default: () => []
+  },
+  cashPosition: {
+    type: Object,
+    default: () => ({})
   }
 })
 
-const showAddModal = ref(false)
+const showAddDepositModal = ref(false)
+const showAddAccountModal = ref(false)
+const showStatementModal = ref(false)
+const showCashPositionModal = ref(false)
 const showDeleteModal = ref(false)
 const depositToDelete = ref(null)
+const cashPositionDate = ref(new Date().toISOString().slice(0, 10))
+const cashPositionData = ref(null)
+
+const addDepositForm = useForm({
+  bank_account_id: '',
+  amount: '',
+  deposit_date: '',
+  reference: ''
+})
+
+const addAccountForm = useForm({
+  bank_name: '',
+  account_number: '',
+  account_name: '',
+  opening_balance: 0,
+  currency: 'TZS'
+})
+
+const statementForm = useForm({
+  bank_account_id: ''
+})
 
 const deleteForm = useForm({})
 
@@ -167,6 +347,77 @@ const formatDate = (date) => {
   })
 }
 
+const addDeposit = () => {
+  const formData = new FormData()
+  formData.append('bank_account_id', addDepositForm.bank_account_id)
+  formData.append('amount', addDepositForm.amount)
+  formData.append('deposit_date', addDepositForm.deposit_date)
+  formData.append('reference', addDepositForm.reference)
+  
+  const fileInput = document.querySelector('input[type="file"]')
+  if (fileInput && fileInput.files[0]) {
+    formData.append('slip_image', fileInput.files[0])
+  }
+  
+  router.post('/banking/deposits', formData, {
+    onSuccess: () => {
+      showAddDepositModal.value = false
+      addDepositForm.reset()
+    }
+  })
+}
+
+const addBankAccount = () => {
+  addAccountForm.post('/banking/accounts', {
+    onSuccess: () => {
+      showAddAccountModal.value = false
+      addAccountForm.reset()
+    }
+  })
+}
+
+const uploadStatement = () => {
+  const formData = new FormData()
+  formData.append('bank_account_id', statementForm.bank_account_id)
+  
+  const fileInput = document.querySelector('#statementFile input[type="file"]')
+  if (fileInput && fileInput.files[0]) {
+    formData.append('statement_file', fileInput.files[0])
+  }
+  
+  router.post(`/banking/statements/${statementForm.bank_account_id}`, formData, {
+    onSuccess: () => {
+      showStatementModal.value = false
+      statementForm.reset()
+    }
+  })
+}
+
+const reconcileDeposit = (deposit) => {
+  router.post(`/banking/deposits/${deposit.id}/reconcile`, {}, {
+    onSuccess: () => {
+      router.reload()
+    }
+  })
+}
+
+const loadCashPosition = async () => {
+  const response = await fetch(`/banking/cash-position?date=${cashPositionDate.value}`)
+  cashPositionData.value = await response.json()
+}
+
+const exportCashPosition = () => {
+  window.location.href = `/banking/cash-position?date=${cashPositionDate.value}&export=pdf`
+}
+
+const exportStatement = () => {
+  window.location.href = '/banking/export?format=csv'
+}
+
+const reconcileAccounts = () => {
+  window.location.href = '/banking/reconcile'
+}
+
 const confirmDelete = (deposit) => {
   depositToDelete.value = deposit
   showDeleteModal.value = true
@@ -181,10 +432,6 @@ const deleteDeposit = () => {
       }
     })
   }
-}
-
-const navigateToNewDeposit = () => {
-  router.visit('/banking/create')
 }
 </script>
 
@@ -452,6 +699,71 @@ const navigateToNewDeposit = () => {
   color: #2d7a50;
 }
 
+.table-action--success {
+  color: #2d7a50;
+}
+
+.table-action--success:hover {
+  border-color: #2d7a50;
+}
+
+.td-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.cash-position-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cash-position-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cp-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.cp-row--total {
+  background: #e8f5e9;
+}
+
+.cp-row--highlight {
+  background: #fff3e0;
+  border: 2px solid #e65100;
+}
+
+.cp-label {
+  font-size: 13px;
+  color: #4a6357;
+}
+
+.cp-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2e24;
+}
+
+.cp-value--positive {
+  color: #2d7a50;
+}
+
+.cp-value--negative {
+  color: #c62828;
+}
+
+.cp-value--highlight {
+  color: #e65100;
+}
+
 .modal-btn {
   padding: 8px 16px;
   border-radius: 6px;
@@ -480,6 +792,44 @@ const navigateToNewDeposit = () => {
 .modal-btn--danger:hover {
   background: #a93226;
   border-color: #a93226;
+}
+
+.modal-btn--primary {
+  background: #4caf76;
+  border: 1px solid #4caf76;
+  color: white;
+}
+
+.modal-btn--primary:hover {
+  background: #2d7a50;
+  border-color: #2d7a50;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2e24;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a2e24;
+  background: white;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf76;
 }
 
 .modal-btn:disabled {

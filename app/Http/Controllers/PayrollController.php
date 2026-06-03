@@ -4,138 +4,135 @@ namespace App\Http\Controllers;
 
 use App\Models\Staff;
 use App\Models\SalaryPayment;
+use App\Models\SalaryAdvance;
 use App\Models\AttendanceRecord;
 use App\Models\CollectionSession;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
+use Spatie\LaravelPdf\Facades\Pdf;
+use App\Mail\PaySlipMail;
+use Illuminate\Support\Facades\Mail;
 
 class PayrollController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        try {
-            $month = now()->month;
-            $year = now()->year;
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
 
-            return Inertia::render('Payroll/Index', [
-                'staff' => Staff::with('user', 'zone')
-                    ->where('is_active', true)
-                    ->where('role', 'collector')
-                    ->orderBy('created_at')
-                    ->get()
-                    ->map(function ($staffMember) {
-                        return [
-                            'id' => $staffMember->id ?? null,
-                            'name' => $staffMember->user?->name ?? 'Unknown',
-                            'phone' => $staffMember->phone ?? 'N/A',
-                            'zone' => $staffMember->zone?->name ?? 'Unassigned',
-                            'base_salary' => (float) ($staffMember->base_salary ?? 0),
-                        ];
-                    }),
-                'salaryPayments' => SalaryPayment::with('staff.user')
-                    ->where('pay_month', $month)
-                    ->where('pay_year', $year)
-                    ->get()
-                    ->map(function ($payment) {
-                        return [
-                            'id' => $payment->id ?? null,
-                            'staff_name' => $payment->staff?->user?->name ?? 'Unknown',
-                            'base_salary' => (float) ($payment->base_salary ?? 0),
-                            'allowances' => (float) ($payment->allowances ?? 0),
-                            'commissions' => (float) ($payment->commissions ?? 0),
-                            'deductions' => (float) ($payment->deductions ?? 0),
-                            'net_salary' => (float) ($payment->net_salary ?? 0),
-                            'status' => $payment->status ?? 'pending',
-                            'paid_date' => $payment->paid_date?->format('Y-m-d'),
-                        ];
-                    }),
-                'month' => $month,
-                'year' => $year,
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load payroll data: ' . $e->getMessage());
-        }
+        return Inertia::render('Payroll/Index', [
+            'staff' => Staff::with('user', 'zone')
+                ->where('is_active', true)
+                ->where('role', 'collector')
+                ->get()
+                ->map(fn($s) => [
+                    'id' => $s->id,
+                    'name' => $s->user?->name,
+                    'zone' => $s->zone?->name,
+                    'base_salary' => $s->base_salary,
+                ]),
+            'salaryPayments' => SalaryPayment::with('staff.user')
+                ->where('pay_month', $month)->where('pay_year', $year)
+                ->get(),
+            'month' => $month,
+            'year' => $year,
+            'payrollSummary' => $this->getPayrollSummary($month, $year),
+        ]);
+    }
+
+    private function getPayrollSummary($month, $year)
+    {
+        $payments = SalaryPayment::where('pay_month', $month)->where('pay_year', $year)->get();
+        return [
+            'total_gross' => $payments->sum('base_salary') + $payments->sum('allowances') + $payments->sum('commissions'),
+            'total_deductions' => $payments->sum('deductions'),
+            'total_net' => $payments->sum('net_salary'),
+            'paid_count' => $payments->where('status', 'paid')->count(),
+            'pending_count' => $payments->where('status', 'pending')->count(),
+        ];
     }
 
     public function generate(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'month' => 'required|integer|min:1|max:12',
-            'year' => 'required|integer|min:2020|max:2100',
-        ]);
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
+        $staff = Staff::with('user', 'zone')->where('is_active', true)->where('role', 'collector')->get();
+        $payrollData = [];
+
+        foreach ($staff as $staffMember) {
+            // Attendance
+            $attendance = AttendanceRecord::where('staff_id', $staffMember->id)
+                ->whereMonth('work_date', $month)->whereYear('work_date', $year)->get();
+            $presentDays = $attendance->where('status', 'present')->count();
+            $halfDays = $attendance->where('status', 'half_day')->count();
+            $effectiveDays = $presentDays + ($halfDays * 0.5);
+
+            // Collections
+            $collections = CollectionSession::where('staff_id', $staffMember->id)
+                ->whereMonth('session_date', $month)->whereYear('session_date', $year)
+                ->sum('actual_amount') ?? 0;
+            $commission = $collections * 0.05;
+
+            // Salary Advance deductions
+            $advanceDeduction = SalaryAdvance::where('staff_id', $staffMember->id)
+                ->where('status', 'approved')
+                ->where(function ($q) use ($month, $year) {
+                    $q->whereNull('deduction_month')->orWhere('deduction_month', $month);
+                })->sum('amount') ?? 0;
+
+            $baseSalary = $staffMember->base_salary ?? 0;
+            $allowances = 0;
+            $gross = $baseSalary + $allowances + $commission;
+            $paye = $this->calculatePAYE($gross);
+            $nssf = $this->calculateNSSF($gross);
+            $deductions = $advanceDeduction + $paye + $nssf;
+            $netSalary = $gross - $deductions;
+
+            $payrollData[] = [
+                'staff' => [
+                    'id' => $staffMember->id,
+                    'name' => $staffMember->user?->name,
+                    'zone' => $staffMember->zone?->name,
+                    'base_salary' => $baseSalary,
+                ],
+                'attendance' => ['present' => $presentDays, 'half_days' => $halfDays, 'effective_days' => $effectiveDays],
+                'collections' => $collections,
+                'commission' => $commission,
+                'salary' => [
+                    'base' => $baseSalary,
+                    'allowances' => $allowances,
+                    'gross' => $gross,
+                    'paye' => $paye,
+                    'nssf' => $nssf,
+                    'advance' => $advanceDeduction,
+                    'deductions' => $deductions,
+                    'net' => $netSalary,
+                ],
+            ];
         }
 
-        try {
-            $month = $request->month;
-            $year = $request->year;
+        return Inertia::render('Payroll/Generate', ['payrollData' => $payrollData, 'month' => $month, 'year' => $year]);
+    }
 
-            $staff = Staff::with('user', 'zone')
-                ->where('is_active', true)
-                ->where('role', 'collector')
-                ->get();
+    private function calculatePAYE($taxableIncome)
+    {
+        // Tanzania PAYE rates (simplified)
+        if ($taxableIncome <= 270000) return 0;
+        if ($taxableIncome <= 520000) return ($taxableIncome - 270000) * 0.08;
+        if ($taxableIncome <= 760000) return 20000 + ($taxableIncome - 520000) * 0.09;
+        if ($taxableIncome <= 1000000) return 41600 + ($taxableIncome - 760000) * 0.10;
+        return 65600 + ($taxableIncome - 1000000) * 0.10;
+    }
 
-            $payrollData = $staff->map(function ($staffMember) use ($month, $year) {
-                // Calculate attendance
-                $attendance = AttendanceRecord::where('staff_id', $staffMember->id)
-                    ->whereMonth('work_date', $month)
-                    ->whereYear('work_date', $year)
-                    ->get();
-
-                $presentDays = $attendance->where('status', 'present')->count();
-                $halfDays = $attendance->where('status', 'half_day')->count();
-                $totalDays = $presentDays + ($halfDays * 0.5);
-
-                // Calculate collections
-                $collections = CollectionSession::where('staff_id', $staffMember->id)
-                    ->whereMonth('session_date', $month)
-                    ->whereYear('session_date', $year)
-                    ->sum('actual_amount') ?? 0;
-
-                // Calculate commission (5% of collections)
-                $commission = $collections * 0.05;
-
-                // Calculate net salary
-                $baseSalary = $staffMember->base_salary ?? 0;
-                $allowances = 0;
-                $deductions = 0;
-                $netSalary = $baseSalary + $allowances + $commission - $deductions;
-
-                return [
-                    'staff' => [
-                        'id' => $staffMember->id,
-                        'name' => $staffMember->user?->name ?? 'Unknown',
-                        'phone' => $staffMember->phone ?? 'N/A',
-                        'zone' => $staffMember->zone?->name ?? 'Unassigned',
-                        'base_salary' => (float) $baseSalary,
-                    ],
-                    'attendance' => [
-                        'present' => $presentDays,
-                        'half_days' => $halfDays,
-                        'total_days' => $totalDays,
-                    ],
-                    'collections' => (float) $collections,
-                    'commission' => (float) $commission,
-                    'salary' => [
-                        'base' => (float) $baseSalary,
-                        'allowances' => (float) $allowances,
-                        'deductions' => (float) $deductions,
-                        'net' => (float) $netSalary,
-                    ],
-                ];
-            });
-
-            return Inertia::render('Payroll/Generate', [
-                'payrollData' => $payrollData,
-                'month' => $month,
-                'year' => $year,
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to generate payroll: ' . $e->getMessage());
-        }
+    private function calculateNSSF($income)
+    {
+        // NSSF Tier I & II simplified: 10% of pensionable income up to cap
+        $pensionableCap = 1000000;
+        $employeeRate = 0.10;
+        return min($income, $pensionableCap) * $employeeRate;
     }
 
     public function store(Request $request)
@@ -146,52 +143,105 @@ class PayrollController extends Controller
             'payments' => 'required|array',
             'payments.*.staff_id' => 'required|exists:staff,id',
             'payments.*.base_salary' => 'required|numeric|min:0',
-            'payments.*.allowances' => 'required|numeric|min:0',
-            'payments.*.commissions' => 'required|numeric|min:0',
-            'payments.*.deductions' => 'required|numeric|min:0',
-            'payments.*.net_salary' => 'required|numeric|min:0',
+            'payments.*.allowances' => 'numeric|min:0',
+            'payments.*.commissions' => 'numeric|min:0',
+            'payments.*.deductions' => 'numeric|min:0',
+            'payments.*.net_salary' => 'numeric|min:0',
         ]);
 
         if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
+            return back()->withErrors($validator);
         }
 
+        DB::beginTransaction();
         try {
             foreach ($request->payments as $payment) {
                 SalaryPayment::updateOrCreate(
-                    [
-                        'staff_id' => $payment['staff_id'],
-                        'pay_month' => $request->month,
-                        'pay_year' => $request->year,
-                    ],
+                    ['staff_id' => $payment['staff_id'], 'pay_month' => $request->month, 'pay_year' => $request->year],
                     [
                         'base_salary' => $payment['base_salary'],
-                        'allowances' => $payment['allowances'],
-                        'commissions' => $payment['commissions'],
-                        'deductions' => $payment['deductions'],
+                        'allowances' => $payment['allowances'] ?? 0,
+                        'commissions' => $payment['commissions'] ?? 0,
+                        'deductions' => $payment['deductions'] ?? 0,
                         'net_salary' => $payment['net_salary'],
                         'status' => 'pending',
                     ]
                 );
             }
-
-            return redirect()->route('payroll.index')->with('success', 'Payroll generated successfully.');
+            DB::commit();
+            return redirect()->route('payroll.index')->with('success', 'Payroll generated.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to save payroll: ' . $e->getMessage());
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
         }
     }
 
-    public function markAsPaid(SalaryPayment $salaryPayment)
+    public function generatePayslip(SalaryPayment $salaryPayment)
     {
-        try {
-            $salaryPayment->update([
-                'status' => 'paid',
-                'paid_date' => now(),
-            ]);
+        $salaryPayment->load('staff.user', 'staff.zone');
+        return Pdf::view('pdf.payslip', ['payment' => $salaryPayment])
+            ->format('A4')
+            ->download("payslip_{$salaryPayment->staff_id}_{$salaryPayment->pay_month}_{$salaryPayment->pay_year}.pdf");
+    }
 
-            return redirect()->back()->with('success', 'Payment marked as paid.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to mark payment as paid: ' . $e->getMessage());
+    public function emailPayslip(SalaryPayment $salaryPayment)
+    {
+        $staff = $salaryPayment->staff;
+        if (!$staff->user || !$staff->user->email) {
+            return back()->with('error', 'Staff email not found.');
         }
+
+        $pdf = Pdf::view('pdf.payslip', ['payment' => $salaryPayment])->output();
+        Mail::to($staff->user->email)->send(new PaySlipMail($pdf, $salaryPayment));
+
+        return back()->with('success', 'Payslip emailed.');
+    }
+
+    public function exportBankFile(Request $request)
+    {
+        $month = $request->query('month', now()->month);
+        $year = $request->query('year', now()->year);
+
+        $payments = SalaryPayment::where('pay_month', $month)->where('pay_year', $year)
+            ->where('status', 'pending')
+            ->with('staff.user')
+            ->get();
+
+        // Generate NACHA or local bank format
+        $content = "BANK_CODE,ACCOUNT_NUMBER,AMOUNT,ACCOUNT_NAME\n";
+        foreach ($payments as $p) {
+            $content .= "CRDB,{$p->staff->bank_account_number},{$p->net_salary},{$p->staff->user->name}\n";
+        }
+
+        return response()->streamDownload(function () use ($content) {
+            echo $content;
+        }, "payroll_{$year}_{$month}.csv");
+    }
+
+    // Salary Advance methods
+    public function requestAdvance(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'staff_id' => 'required|exists:staff,id',
+            'amount' => 'required|numeric|min:1|max:'.(auth()->user()->staff->base_salary * 0.5),
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $advance = SalaryAdvance::create([
+            'staff_id' => $request->staff_id,
+            'amount' => $request->amount,
+            'reason' => $request->reason,
+            'status' => 'pending',
+            'requested_at' => now(),
+        ]);
+
+        return back()->with('success', 'Advance request submitted.');
+    }
+
+    public function approveAdvance($id)
+    {
+        $advance = SalaryAdvance::findOrFail($id);
+        $advance->update(['status' => 'approved', 'approved_by' => auth()->id(), 'approved_at' => now()]);
+        return back()->with('success', 'Advance approved.');
     }
 }

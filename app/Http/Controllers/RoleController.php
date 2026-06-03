@@ -5,155 +5,114 @@ namespace App\Http\Controllers;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class RoleController extends Controller
 {
     public function index()
     {
-        try {
-            // Get roles with user count and permissions
-            $roles = Role::with(['users', 'permissions'])
-                ->get()
-                ->map(function ($role) {
-                    return [
-                        'id' => $role->id ?? null,
-                        'name' => $role->name ?? 'Unknown',
-                        'users_count' => $role->users?->count() ?? 0,
-                        'description' => $role->description ?? '',
-                        'permissions' => $role->permissions?->pluck('name')->toArray() ?? [],
-                    ];
-                });
+        $roles = Role::withCount('users')->with('permissions')->get();
+        $permissionGroups = Permission::all()->groupBy('group');
 
-            return Inertia::render('Roles/Index', [
-                'roles' => $roles,
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load roles: ' . $e->getMessage());
-        }
+        return Inertia::render('Roles/Index', [
+            'roles' => $roles,
+            'permissionGroups' => $permissionGroups,
+        ]);
     }
 
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $request->validate([
             'name' => 'required|string|max:100|unique:roles',
-            'description' => 'nullable|string|max:500',
-            'permissions' => 'nullable|array',
+            'description' => 'nullable|string',
+            'permissions' => 'array',
             'permissions.*' => 'exists:permissions,id',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
-
+        DB::beginTransaction();
         try {
-            $role = Role::create([
-                'name' => $request->name,
-                'description' => $request->description,
-            ]);
-
+            $role = Role::create($request->only('name', 'description'));
             if ($request->has('permissions')) {
                 $role->permissions()->sync($request->permissions);
             }
-
-            return back()->with('success', 'Role created successfully.');
+            AuditLog::log('role.create', 'Role', $role->id, $request->only('name'));
+            DB::commit();
+            return back()->with('success', 'Role created.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to create role: ' . $e->getMessage());
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
         }
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, Role $role)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:100|unique:roles,name,' . $id,
-            'description' => 'nullable|string|max:500',
-            'permissions' => 'nullable|array',
-            'permissions.*' => 'exists:permissions,id',
+        $request->validate([
+            'name' => 'required|string|max:100|unique:roles,name,'.$role->id,
+            'description' => 'nullable|string',
+            'permissions' => 'array',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
-
+        DB::beginTransaction();
         try {
-            $role = Role::findOrFail($id);
-            $role->update([
-                'name' => $request->name,
-                'description' => $request->description,
-            ]);
+            $role->update($request->only('name', 'description'));
+            $role->permissions()->sync($request->permissions ?? []);
+            AuditLog::log('role.update', 'Role', $role->id, $request->all());
+            DB::commit();
+            return back()->with('success', 'Role updated.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
+        }
+    }
 
-            if ($request->has('permissions')) {
-                $role->permissions()->sync($request->permissions);
+    public function destroy(Role $role)
+    {
+        if ($role->users()->exists()) {
+            return back()->with('error', 'Cannot delete role with assigned users.');
+        }
+        $role->delete();
+        return back()->with('success', 'Role deleted.');
+    }
+
+    public function clone(Role $role, Request $request)
+    {
+        $request->validate(['new_name' => 'required|string|unique:roles,name']);
+
+        DB::beginTransaction();
+        try {
+            $newRole = $role->replicate();
+            $newRole->name = $request->new_name;
+            $newRole->save();
+            $newRole->permissions()->sync($role->permissions->pluck('id'));
+            AuditLog::log('role.clone', 'Role', $newRole->id, ['source_role_id' => $role->id]);
+            DB::commit();
+            return back()->with('success', 'Role cloned.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function seedDefaults()
+    {
+        $defaults = [
+            'super-admin' => ['all' => true],
+            'manager' => ['view_reports', 'approve_expense', 'manage_staff'],
+            'collector' => ['record_payment', 'view_my_routes', 'clock_in_out'],
+            'accountant' => ['manage_transactions', 'reconcile_bank', 'export_financials'],
+        ];
+
+        foreach ($defaults as $roleName => $perms) {
+            $role = Role::firstOrCreate(['name' => $roleName]);
+            if ($perms['all'] ?? false) {
+                $role->permissions()->sync(Permission::pluck('id'));
+            } else {
+                $permIds = Permission::whereIn('name', $perms)->pluck('id');
+                $role->permissions()->sync($permIds);
             }
-
-            return back()->with('success', 'Role updated successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to update role: ' . $e->getMessage());
-        }
-    }
-
-    public function destroy($id)
-    {
-        try {
-            $role = Role::findOrFail($id);
-            
-            // Prevent deletion if role has users
-            if ($role->users()->count() > 0) {
-                return back()->with('error', 'Cannot delete role with assigned users.');
-            }
-
-            $role->delete();
-
-            return back()->with('success', 'Role deleted successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to delete role: ' . $e->getMessage());
-        }
-    }
-
-    public function assign(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
-            'role_id' => 'required|exists:roles,id',
-        ]);
-
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
         }
 
-        try {
-            $user = \App\Models\User::findOrFail($request->user_id);
-            $role = Role::findOrFail($request->role_id);
-            
-            $user->roles()->syncWithoutDetaching([$role->id]);
-
-            return back()->with('success', 'Role assigned successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to assign role: ' . $e->getMessage());
-        }
-    }
-
-    public function revoke(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
-            'role_id' => 'required|exists:roles,id',
-        ]);
-
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
-
-        try {
-            $user = \App\Models\User::findOrFail($request->user_id);
-            $role = Role::findOrFail($request->role_id);
-            
-            $user->roles()->detach($role->id);
-
-            return back()->with('success', 'Role revoked successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to revoke role: ' . $e->getMessage());
-        }
+        return back()->with('success', 'Default roles seeded.');
     }
 }

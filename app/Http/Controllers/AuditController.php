@@ -4,76 +4,83 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
+use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\QueryBuilder\AllowedFilter;
 
 class AuditController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        try {
-            // Get recent audit logs with user information
-            $activities = AuditLog::with('user')
-                ->orderBy('timestamp', 'desc')
-                ->limit(50)
-                ->get()
-                ->map(function ($log) {
-                    return [
-                        'id' => $log->id ?? null,
-                        'timestamp' => $log->timestamp?->toISOString() ?? now()->toISOString(),
-                        'user' => $log->user?->name ?? 'System',
-                        'action' => $log->action ?? 'Unknown',
-                        'module' => $log->module ?? 'Unknown',
-                        'description' => $log->description ?? 'N/A',
-                        'ip_address' => $log->ip_address ?? 'N/A',
-                        'status' => $log->status ?? 'success',
-                    ];
-                });
+        $logs = QueryBuilder::for(AuditLog::class)
+            ->with('user')
+            ->allowedFilters([
+                AllowedFilter::exact('action'),
+                AllowedFilter::exact('module'),
+                AllowedFilter::exact('user_id'),
+                AllowedFilter::exact('status'),
+                AllowedFilter::callback('date_range', function ($query, $value) {
+                    $dates = explode(',', $value);
+                    $query->whereBetween('timestamp', [$dates[0], $dates[1]]);
+                }),
+                AllowedFilter::partial('description'),
+            ])
+            ->allowedSorts('timestamp', 'id')
+            ->defaultSort('-timestamp')
+            ->paginate(50)
+            ->withQueryString();
 
-            return Inertia::render('Audit/Index', [
-                'activities' => $activities,
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load audit logs: ' . $e->getMessage());
-        }
+        return Inertia::render('Audit/Index', [
+            'logs' => $logs,
+            'filters' => $request->only(['action', 'module', 'user_id', 'date_range']),
+            'stats' => [
+                'total_today' => AuditLog::whereDate('timestamp', today())->count(),
+                'total_this_week' => AuditLog::whereBetween('timestamp', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+                'by_action' => AuditLog::selectRaw('action, count(*) as count')->groupBy('action')->get(),
+            ],
+        ]);
     }
 
-    public function export()
+    public function show(AuditLog $auditLog)
     {
-        try {
-            $activities = AuditLog::with('user')
-                ->orderBy('timestamp', 'desc')
-                ->get()
-                ->map(function ($log) {
-                    return [
-                        'Timestamp' => $log->timestamp?->format('Y-m-d H:i:s'),
-                        'User' => $log->user?->name ?? 'System',
-                        'Action' => $log->action,
-                        'Module' => $log->module,
-                        'Description' => $log->description,
-                        'IP Address' => $log->ip_address,
-                        'Status' => $log->status,
-                    ];
-                });
+        $auditLog->load('user');
+        // Optionally decode old/new values
+        if ($auditLog->old_values) $auditLog->old_values = json_decode($auditLog->old_values, true);
+        if ($auditLog->new_values) $auditLog->new_values = json_decode($auditLog->new_values, true);
 
-            $filename = 'audit_logs_' . now()->format('Y-m-d_His') . '.csv';
-            $headers = [
-                'Content-Type' => 'text/csv',
-                'Content-Disposition' => "attachment; filename=\"$filename\"",
-            ];
+        return Inertia::render('Audit/Show', ['log' => $auditLog]);
+    }
 
-            $callback = function () use ($activities) {
-                $file = fopen('php://output', 'w');
-                fputcsv($file, array_keys($activities->first() ?? []));
-                foreach ($activities as $activity) {
-                    fputcsv($file, $activity);
-                }
-                fclose($file);
-            };
-
-            return response()->stream($callback, 200, $headers);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to export audit logs: ' . $e->getMessage());
+    public function restore(AuditLog $auditLog)
+    {
+        // Only for 'updated' or 'deleted' actions
+        if ($auditLog->action !== 'deleted' || !$auditLog->old_values) {
+            return back()->with('error', 'Cannot restore this log entry.');
         }
+
+        $modelClass = $auditLog->module;
+        if (!class_exists($modelClass)) {
+            return back()->with('error', 'Model class not found.');
+        }
+
+        $oldData = json_decode($auditLog->old_values, true);
+        $model = $modelClass::withTrashed()->find($auditLog->record_id);
+
+        if ($model && $model->trashed()) {
+            $model->restore();
+            $model->update($oldData);
+            AuditLog::log('restore', $modelClass, $auditLog->record_id, ['restored_from_log_id' => $auditLog->id]);
+            return back()->with('success', 'Record restored successfully.');
+        }
+
+        return back()->with('error', 'Record not found or not deleted.');
+    }
+
+    public function cleanup(Request $request)
+    {
+        $days = $request->input('days', 90);
+        $deleted = AuditLog::where('timestamp', '<', now()->subDays($days))->delete();
+
+        return back()->with('success', "Deleted {$deleted} audit logs older than {$days} days.");
     }
 }

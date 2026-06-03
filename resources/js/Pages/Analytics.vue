@@ -113,6 +113,42 @@
 import { ref } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
+const props = defineProps({
+  metrics: {
+    type: Object,
+    default: () => ({
+      totalRevenue: 0,
+      revenueChange: 0,
+      collectionRate: 0,
+      collectionRateChange: 0,
+      activeClients: 0,
+      newClients: 0,
+      outstandingDebt: 0,
+      debtChange: 0,
+    })
+  },
+  revenueTrend: {
+    type: Array,
+    default: () => []
+  },
+  collectionByZone: {
+    type: Array,
+    default: () => []
+  },
+  topCollectors: {
+    type: Array,
+    default: () => []
+  },
+  period: {
+    type: Object,
+    default: () => ({ month: 1, year: 2024 })
+  },
+  error: {
+    type: String,
+    default: null
+  }
+})
+
 const activePeriod = ref('monthly')
 
 const periods = [

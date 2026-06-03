@@ -32,13 +32,19 @@
 
       <!-- Action Buttons -->
       <div class="actions-bar">
-        <button class="action-btn action-btn--primary">
+        <button class="action-btn action-btn--primary" @click="showAddModal = true">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
           </svg>
           Add Staff
         </button>
-        <button class="action-btn">
+        <button class="action-btn" @click="showImportModal = true">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          Bulk Import
+        </button>
+        <button class="action-btn" @click="exportReport">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
           </svg>
@@ -100,8 +106,12 @@
               <td>{{ staffMember.zone }}</td>
               <td>{{ staffMember.phone }}</td>
               <td><span class="status-badge" :class="`status-badge--${staffMember.is_active ? 'active' : 'inactive'}`">{{ staffMember.is_active ? 'Active' : 'Inactive' }}</span></td>
-              <td>
-                <Link :href="route('staff.show', staffMember.id)" class="table-action">View</Link>
+              <td class="td-actions">
+                <Link :href="`/staff/${staffMember.id}`" class="table-action">View</Link>
+                <button class="table-action" @click="showDocumentModal(staffMember)">Documents</button>
+                <button class="table-action" @click="showRatingModal(staffMember)">Rate</button>
+                <button v-if="staffMember.is_active" class="table-action table-action--danger" @click="archiveStaff(staffMember)">Archive</button>
+                <button v-else class="table-action" @click="restoreStaff(staffMember)">Restore</button>
               </td>
             </tr>
             <tr v-if="staff.length === 0">
@@ -198,13 +208,128 @@
         </div>
       </div>
     </div>
+
+    <!-- Add Staff Modal -->
+    <Modal :show="showAddModal" @close="showAddModal = false" title="Add Staff">
+      <form @submit.prevent="addStaff">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" v-model="addForm.name" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" v-model="addForm.phone" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select v-model="addForm.role" class="form-input" required>
+            <option value="">Select Role</option>
+            <option value="collector">Collector</option>
+            <option value="driver">Driver</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Zone</label>
+          <select v-model="addForm.zone_id" class="form-input" required>
+            <option value="">Select Zone</option>
+            <option v-for="zone in zones" :key="zone.id" :value="zone.id">{{ zone.name }}</option>
+          </select>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showAddModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="addStaff" :disabled="addForm.processing">
+          {{ addForm.processing ? 'Adding...' : 'Add Staff' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Bulk Import Modal -->
+    <Modal :show="showImportModal" @close="showImportModal = false" title="Bulk Import Staff">
+      <form @submit.prevent="processImport">
+        <div class="form-group">
+          <label>Upload CSV or Excel File</label>
+          <input type="file" ref="importFile" class="form-input" accept=".csv,.xlsx,.xls" required />
+          <small class="form-hint">Columns: name, phone, role, zone_id, base_salary</small>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showImportModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="processImport" :disabled="importForm.processing">
+          {{ importForm.processing ? 'Importing...' : 'Import' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Document Upload Modal -->
+    <Modal :show="showDocumentModal" @close="showDocumentModal = false" title="Upload Document">
+      <form @submit.prevent="uploadDocument">
+        <div class="form-group">
+          <label>Document Type</label>
+          <select v-model="documentForm.type" class="form-input" required>
+            <option value="contract">Contract</option>
+            <option value="id_card">ID Card</option>
+            <option value="license">License</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>File</label>
+          <input type="file" ref="documentFile" class="form-input" accept=".pdf,.jpg,.png" required />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea v-model="documentForm.description" class="form-input" rows="2"></textarea>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showDocumentModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="uploadDocument" :disabled="documentForm.processing">
+          {{ documentForm.processing ? 'Uploading...' : 'Upload' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Performance Rating Modal -->
+    <Modal :show="showRatingModal" @close="showRatingModal = false" title="Rate Performance">
+      <form @submit.prevent="submitRating">
+        <div class="form-group">
+          <label>Rating (1-5)</label>
+          <select v-model="ratingForm.rating" class="form-input" required>
+            <option value="">Select Rating</option>
+            <option value="1">1 - Poor</option>
+            <option value="2">2 - Fair</option>
+            <option value="3">3 - Good</option>
+            <option value="4">4 - Very Good</option>
+            <option value="5">5 - Excellent</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Period (YYYY-MM)</label>
+          <input type="month" v-model="ratingForm.period" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Comments</label>
+          <textarea v-model="ratingForm.comments" class="form-input" rows="3"></textarea>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showRatingModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="submitRating" :disabled="ratingForm.processing">
+          {{ ratingForm.processing ? 'Submitting...' : 'Submit Rating' }}
+        </button>
+      </template>
+    </Modal>
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
 
 const props = defineProps({
   staff: {
@@ -217,9 +342,33 @@ const props = defineProps({
   }
 })
 
+const showAddModal = ref(false)
+const showImportModal = ref(false)
+const showDocumentModal = ref(false)
+const showRatingModal = ref(false)
 const searchQuery = ref('')
 const filterDepartment = ref('')
 const filterStatus = ref('')
+const selectedStaff = ref(null)
+
+const addForm = useForm({
+  name: '',
+  phone: '',
+  role: '',
+  zone_id: ''
+})
+
+const importForm = useForm({})
+const documentForm = useForm({
+  type: '',
+  file: null,
+  description: ''
+})
+const ratingForm = useForm({
+  rating: '',
+  period: '',
+  comments: ''
+})
 
 const filteredStaff = computed(() => {
   return props.staff.filter(s => {
@@ -243,6 +392,87 @@ const onLeaveStaff = computed(() => props.staff.filter(s => !s.is_active).length
 const initials = (name) => {
   if (!name) return '??'
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
+
+const addStaff = () => {
+  addForm.post('/staff', {
+    onSuccess: () => {
+      showAddModal.value = false
+      addForm.reset()
+    }
+  })
+}
+
+const exportReport = () => {
+  window.location.href = '/staff/export?format=csv'
+}
+
+const processImport = () => {
+  const fileInput = document.querySelector('input[type="file"]')
+  const formData = new FormData()
+  formData.append('file', fileInput.files[0])
+  
+  router.post('/staff/bulk-import', formData, {
+    onSuccess: () => {
+      showImportModal.value = false
+      importForm.reset()
+    }
+  })
+}
+
+const showDocumentModal = (staff) => {
+  selectedStaff.value = staff
+  documentForm.reset()
+  showDocumentModal.value = true
+}
+
+const uploadDocument = () => {
+  const fileInput = document.querySelector('#documentFile input[type="file"]')
+  const formData = new FormData()
+  formData.append('type', documentForm.type)
+  formData.append('file', fileInput.files[0])
+  formData.append('description', documentForm.description)
+  
+  router.post(`/staff/${selectedStaff.value.id}/documents`, formData, {
+    onSuccess: () => {
+      showDocumentModal.value = false
+      documentForm.reset()
+    }
+  })
+}
+
+const showRatingModal = (staff) => {
+  selectedStaff.value = staff
+  ratingForm.reset()
+  ratingForm.period = new Date().toISOString().slice(0, 7)
+  showRatingModal.value = true
+}
+
+const submitRating = () => {
+  router.post(`/staff/${selectedStaff.value.id}/rate-performance`, ratingForm.data(), {
+    onSuccess: () => {
+      showRatingModal.value = false
+      ratingForm.reset()
+    }
+  })
+}
+
+const archiveStaff = (staff) => {
+  if (confirm(`Are you sure you want to archive ${staff.name}?`)) {
+    router.post(`/staff/${staff.id}/archive`, {}, {
+      onSuccess: () => {
+        router.reload()
+      }
+    })
+  }
+}
+
+const restoreStaff = (staff) => {
+  router.post(`/staff/${staff.id}/restore`, {}, {
+    onSuccess: () => {
+      router.reload()
+    }
+  })
 }
 </script>
 
@@ -528,6 +758,27 @@ const initials = (name) => {
   color: #2d7a50;
 }
 
+.table-action--danger {
+  color: #c62828;
+}
+
+.table-action--danger:hover {
+  border-color: #c62828;
+  color: #b71c1c;
+}
+
+.td-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.form-hint {
+  display: block;
+  font-size: 11px;
+  color: #7a9489;
+  margin-top: 4px;
+}
+
 .departments-section {
   background: white;
   border: 1px solid rgba(0,0,0,0.08);
@@ -625,5 +876,55 @@ const initials = (name) => {
   .departments-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2e24;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a2e24;
+  background: white;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf76;
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.modal-btn--cancel {
+  background: #f5f5f5;
+  color: #4a6357;
+}
+
+.modal-btn--primary {
+  background: #4caf76;
+  color: white;
+}
+
+.modal-btn--primary:hover {
+  background: #2d7a50;
 }
 </style>

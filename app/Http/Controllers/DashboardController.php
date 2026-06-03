@@ -415,4 +415,79 @@ class DashboardController extends Controller
             'status' => 'active',
         ]);
     }
+    public function exportDashboard(Request $request)
+{
+    $period = $request->get('period', 'monthly');
+    [$start, $end] = $this->getPeriodRange($period);
+
+    $payments = Payment::with(['client', 'staff.user'])
+        ->whereBetween('paid_at', [$start, $end])
+        ->where('status', 'paid')
+        ->get();
+
+    $pdf = Pdf::view('pdf.dashboard', [
+        'period' => $period,
+        'stats' => $this->getStats($start, $end),
+        'payments' => $payments,
+        'collectors' => $this->getCollectorPerformance($start, $end),
+    ])->format('A4')->landscape();
+
+    return $pdf->download("dashboard_{$period}_{$start->format('Y-m-d')}.pdf");
+}
+
+private function getStats($start, $end)
+{
+    $totalCollected = Payment::whereBetween('paid_at', [$start, $end])->sum('amount');
+    $totalInvoiced = Invoice::whereBetween('created_at', [$start, $end])->sum('amount_due');
+    return [
+        'total_collected' => $totalCollected,
+        'collection_rate' => $totalInvoiced > 0 ? round($totalCollected / $totalInvoiced * 100, 1) : 0,
+        'transactions' => Payment::whereBetween('paid_at', [$start, $end])->count(),
+        'active_clients' => Client::where('status', 'active')->count(),
+    ];
+}
+
+private function getCollectorPerformance($start, $end)
+{
+    return Staff::where('role', 'collector')->get()->map(function ($staff) use ($start, $end) {
+        $collected = Payment::where('staff_id', $staff->id)
+            ->whereBetween('paid_at', [$start, $end])
+            ->sum('amount');
+        return [
+            'name' => $staff->user?->name,
+            'collected' => $collected,
+            'target' => 1200000,
+        ];
+    })->sortByDesc('collected')->values();
+}
+
+public function getAlerts()
+{
+    // Real-time alerts for dashboard widget
+    $alerts = [];
+
+    // Vehicles with low fuel (<20%)
+    $lowFuelVehicles = Vehicle::where('fuel_level', '<', 20)->count();
+    if ($lowFuelVehicles) {
+        $alerts[] = ['type' => 'warning', 'message' => "{$lowFuelVehicles} vehicle(s) have low fuel (<20%)."];
+    }
+
+    // Vehicles with expiring insurance (within 30 days)
+    $expiringInsurance = Vehicle::where('insurance_expiry', '<=', now()->addDays(30))
+        ->where('insurance_expiry', '>', now())
+        ->count();
+    if ($expiringInsurance) {
+        $alerts[] = ['type' => 'info', 'message' => "{$expiringInsurance} vehicle(s) have insurance expiring soon."];
+    }
+
+    // Overdue invoices (past due date)
+    $overdueInvoices = Invoice::where('due_date', '<', now())
+        ->whereIn('status', ['unpaid', 'partial'])
+        ->count();
+    if ($overdueInvoices) {
+        $alerts[] = ['type' => 'danger', 'message' => "{$overdueInvoices} invoice(s) are overdue."];
+    }
+
+    return response()->json($alerts);
+}
 }

@@ -3,157 +3,141 @@
 namespace App\Http\Controllers;
 
 use App\Models\Staff;
+use App\Models\StaffDocument;
+use App\Models\PerformanceRating;
 use App\Models\AttendanceRecord;
 use App\Models\CollectionSession;
-use App\Services\ReportService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class StaffController extends Controller
 {
     public function index()
     {
-        try {
-            return Inertia::render('Staff/Index', [
-                'staff' => Staff::with('user', 'zone')
-                    ->where('is_active', true)
-                    ->orderBy('created_at')
-                    ->get()
-                    ->map(function ($staffMember) {
-                        return [
-                            'id' => $staffMember->id ?? null,
-                            'name' => $staffMember->user?->name ?? 'Unknown',
-                            'phone' => $staffMember->phone ?? 'N/A',
-                            'role' => $staffMember->role ?? 'Unknown',
-                            'zone' => $staffMember->zone?->name ?? 'Unassigned',
-                            'base_salary' => (float) ($staffMember->base_salary ?? 0),
-                            'is_active' => $staffMember->is_active ?? false,
-                        ];
-                    }),
-                'zones' => \App\Models\Zone::all()->map(function ($zone) {
-                    return [
-                        'id' => $zone->id ?? null,
-                        'name' => $zone->name ?? 'Unknown',
-                    ];
-                }),
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load staff data: ' . $e->getMessage());
-        }
+        return Inertia::render('Staff/Index', [
+            'staff' => Staff::with('user', 'zone')
+                ->orderBy('name')
+                ->get()
+                ->map(fn($s) => [
+                    'id' => $s->id,
+                    'name' => $s->user?->name,
+                    'phone' => $s->phone,
+                    'role' => $s->role,
+                    'zone' => $s->zone?->name,
+                    'base_salary' => $s->base_salary,
+                    'is_active' => $s->is_active,
+                    'avatar' => $s->avatar,
+                ]),
+            'zones' => \App\Models\Zone::all(),
+        ]);
     }
 
     public function show(Staff $staff)
     {
-        try {
-            return Inertia::render('Staff/Show', [
-                'staff' => [
-                    'id' => $staff->id,
-                    'name' => $staff->user?->name ?? 'Unknown',
-                    'phone' => $staff->phone ?? 'N/A',
-                    'role' => $staff->role ?? 'Unknown',
-                    'zone' => $staff->zone?->name ?? 'Unassigned',
-                    'base_salary' => (float) ($staff->base_salary ?? 0),
-                    'hire_date' => $staff->hire_date?->format('Y-m-d'),
-                ],
-                'attendance' => AttendanceRecord::where('staff_id', $staff->id)
-                    ->whereMonth('work_date', now()->month)
-                    ->whereYear('work_date', now()->year)
-                    ->orderBy('work_date')
-                    ->get()
-                    ->map(function ($record) {
-                        return [
-                            'id' => $record->id ?? null,
-                            'work_date' => $record->work_date?->format('Y-m-d'),
-                            'status' => $record->status ?? 'unknown',
-                            'clock_in' => $record->clock_in?->format('H:i:s'),
-                            'clock_out' => $record->clock_out?->format('H:i:s'),
-                        ];
-                    }),
-                'collectionSessions' => CollectionSession::where('staff_id', $staff->id)
-                    ->whereMonth('session_date', now()->month)
-                    ->whereYear('session_date', now()->year)
-                    ->with('payments')
-                    ->orderBy('session_date')
-                    ->get()
-                    ->map(function ($session) {
-                        return [
-                            'id' => $session->id ?? null,
-                            'session_date' => $session->session_date?->format('Y-m-d'),
-                            'planned_amount' => (float) ($session->planned_amount ?? 0),
-                            'actual_amount' => (float) ($session->actual_amount ?? 0),
-                            'status' => $session->status ?? 'pending',
-                        ];
-                    }),
-                'performance' => app(ReportService::class)->collectorPerformance($staff->id, now()->month, now()->year),
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load staff details: ' . $e->getMessage());
+        $staff->load('user', 'zone');
+
+        // Performance trend last 6 months
+        $performanceTrend = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $month = now()->subMonths($i);
+            $collections = CollectionSession::where('staff_id', $staff->id)
+                ->whereYear('session_date', $month->year)->whereMonth('session_date', $month->month)
+                ->sum('actual_amount');
+            $performanceTrend[] = ['month' => $month->format('M Y'), 'collections' => $collections];
         }
+
+        return Inertia::render('Staff/Show', [
+            'staff' => $staff,
+            'attendance' => AttendanceRecord::where('staff_id', $staff->id)
+                ->whereMonth('work_date', now()->month)->orderBy('work_date')->get(),
+            'collectionSessions' => CollectionSession::where('staff_id', $staff->id)
+                ->whereMonth('session_date', now()->month)->with('payments')->get(),
+            'documents' => StaffDocument::where('staff_id', $staff->id)->get(),
+            'performanceTrend' => $performanceTrend,
+            'emergencyContacts' => $staff->emergencyContacts,
+            'ratings' => PerformanceRating::where('staff_id', $staff->id)->latest()->take(5)->get(),
+        ]);
     }
 
-    public function store(Request $request)
+    public function uploadDocument(Request $request, Staff $staff)
     {
-        $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
-            'national_id' => 'nullable|string|max:50',
-            'phone' => 'required|string|max:20',
-            'zone_id' => 'nullable|exists:zones,id',
-            'role' => 'required|in:collector,supervisor,accountant,manager,admin',
-            'base_salary' => 'required|numeric|min:0',
-            'hire_date' => 'required|date',
+        $request->validate([
+            'type' => 'required|in:contract,id_card,license,other',
+            'file' => 'required|file|max:5120|mimes:pdf,jpg,png',
+            'description' => 'nullable|string',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
+        $path = $request->file('file')->store("staff/{$staff->id}/documents", 'public');
 
-        try {
-            Staff::create([
-                'user_id' => $request->user_id,
-                'national_id' => $request->national_id,
-                'phone' => $request->phone,
-                'zone_id' => $request->zone_id,
-                'role' => $request->role,
-                'base_salary' => $request->base_salary,
-                'hire_date' => $request->hire_date,
-                'is_active' => true,
-            ]);
+        StaffDocument::create([
+            'staff_id' => $staff->id,
+            'type' => $request->type,
+            'file_path' => $path,
+            'original_name' => $request->file('file')->getClientOriginalName(),
+            'description' => $request->description,
+            'uploaded_by' => auth()->id(),
+        ]);
 
-            return redirect()->back()->with('success', 'Staff member created successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to create staff member: ' . $e->getMessage());
-        }
+        return back()->with('success', 'Document uploaded.');
     }
 
-    public function update(Request $request, Staff $staff)
+    public function addEmergencyContact(Request $request, Staff $staff)
     {
-        $validator = Validator::make($request->all(), [
-            'national_id' => 'nullable|string|max:50',
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'relationship' => 'required|string|max:100',
             'phone' => 'required|string|max:20',
-            'zone_id' => 'nullable|exists:zones,id',
-            'role' => 'required|in:collector,supervisor,accountant,manager,admin',
-            'base_salary' => 'required|numeric|min:0',
-            'is_active' => 'boolean',
+            'alternate_phone' => 'nullable|string|max:20',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
+        $staff->emergencyContacts()->create($request->all());
+        return back()->with('success', 'Emergency contact added.');
+    }
 
-        try {
-            $staff->update([
-                'national_id' => $request->national_id,
-                'phone' => $request->phone,
-                'zone_id' => $request->zone_id,
-                'role' => $request->role,
-                'base_salary' => $request->base_salary,
-                'is_active' => $request->is_active ?? true,
-            ]);
+    public function ratePerformance(Request $request, Staff $staff)
+    {
+        $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'comments' => 'nullable|string',
+            'period' => 'required|date_format:Y-m',
+        ]);
 
-            return redirect()->back()->with('success', 'Staff member updated successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to update staff member: ' . $e->getMessage());
-        }
+        PerformanceRating::create([
+            'staff_id' => $staff->id,
+            'rating' => $request->rating,
+            'comments' => $request->comments,
+            'period' => $request->period,
+            'rated_by' => auth()->id(),
+        ]);
+
+        return back()->with('success', 'Performance rating added.');
+    }
+
+    public function bulkImport(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,xlsx|max:10240',
+        ]);
+
+        $import = new \App\Imports\StaffImport();
+        \Excel::import($import, $request->file('file'));
+
+        return back()->with('success', "Imported {$import->getRowCount()} staff members.");
+    }
+
+    public function archive(Staff $staff)
+    {
+        $staff->update(['is_active' => false, 'archived_at' => now()]);
+        return back()->with('success', 'Staff archived.');
+    }
+
+    public function restore($id)
+    {
+        $staff = Staff::withTrashed()->findOrFail($id);
+        $staff->restore();
+        $staff->update(['is_active' => true]);
+        return back()->with('success', 'Staff restored.');
     }
 }

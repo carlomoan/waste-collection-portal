@@ -11,148 +11,169 @@ use App\Models\Staff;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Smalot\PdfParser\Parser;
 
 class TausiPosImportService
 {
     private array $errors = [];
+    private array $warnings = [];
+    private array $stats = [
+        'payers_found' => 0,
+        'payers_created' => 0,
+        'collectors_found' => 0,
+        'collectors_created' => 0,
+        'invoices_matched' => 0,
+        'invoices_not_found' => 0,
+    ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | PUBLIC: Preview (no DB writes — returns parsed rows for user to confirm)
-    |--------------------------------------------------------------------------
-    */
-    public function preview(string $filePath, string $mimeType): array
+    /**
+     * Preview data extracted from PDF text.
+     */
+    public function previewFromText(string $text): array
     {
-        $rows    = $this->extractRows($filePath, $mimeType);
-        $preview = [];
-
-        foreach ($rows as $row) {
-            $client = $this->findClient($row['payer_name']);
-            $exists = Payment::where('control_number', $row['control_number'])->exists();
-
-            $preview[] = array_merge($row, [
-                'paid_at'            => $row['paid_at']->toDateTimeString(),
-                'client_found'       => $client !== null,
-                'client_name'        => $client?->name ?? $row['payer_name'],
-                'client_id'          => $client?->id,
-                'client_number'      => $client?->client_number ?? 'NEW',
-                'already_exists'     => $exists,
-                'will_create_client' => $client === null && !empty($row['payer_name']),
-            ]);
-        }
-
-        $newClients = collect($preview)
-            ->where('will_create_client', true)
-            ->pluck('payer_name')
-            ->unique()
-            ->values()
-            ->toArray();
-
+        $records = $this->parseTextRows($text);
         return [
-            'rows'        => $preview,
-            'total'       => count($preview),
-            'new_clients' => $newClients,
-            'duplicates'  => collect($preview)->where('already_exists', true)->count(),
-            'will_import' => collect($preview)->where('already_exists', false)->count(),
-            'summary'     => $this->buildPreviewSummary($preview),
+            'success' => true,
+            'data' => $records,
+            'total' => count($records),
+            'summary' => $this->buildPreviewSummary($records),
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PUBLIC: Import (writes to DB)
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Preview data from file path.
+     */
+    public function preview(string $filePath, string $mimeType): array
+    {
+        $rows = $this->extractRows($filePath, $mimeType);
+        return [
+            'success' => true,
+            'data' => $rows,
+            'total' => count($rows),
+            'summary' => $this->buildPreviewSummary($rows),
+        ];
+    }
+
+    /**
+     * Import payments from extracted text.
+     */
+    public function importFromText(string $text): array
+    {
+        $records = $this->parseTextRows($text);
+        return $this->processImport($records);
+    }
+
+    /**
+     * Import payments from file.
+     */
     public function import(string $filePath, string $mimeType): array
     {
         $rows = $this->extractRows($filePath, $mimeType);
-        $imported = 0; $skipped = 0; $clientsCreated = 0;
+        return $this->processImport($rows);
+    }
 
-        DB::transaction(function () use ($rows, &$imported, &$skipped, &$clientsCreated) {
+    // -------------------------------------------------------------------------
+    // Private: Import Processing
+    // -------------------------------------------------------------------------
+
+    private function processImport(array $rows): array
+    {
+        $imported = 0;
+        $skipped = 0;
+        $importedIds = [];
+        $this->errors = [];
+        $this->warnings = [];
+        $this->stats = [
+            'payers_found' => 0,
+            'payers_created' => 0,
+            'collectors_found' => 0,
+            'collectors_created' => 0,
+            'invoices_matched' => 0,
+            'invoices_not_found' => 0,
+        ];
+
+        DB::transaction(function () use ($rows, &$imported, &$skipped, &$importedIds) {
             foreach ($rows as $row) {
-
-                // Skip if control number already recorded
                 if (Payment::where('control_number', $row['control_number'])->exists()) {
                     $skipped++;
+                    $this->warnings[] = "Control {$row['control_number']}: Already exists, skipped.";
                     continue;
                 }
 
                 try {
-                    // Collector
-                    $staff = $this->findOrCreateCollector($row['collector_name']);
+                    $staff = $this->findOrCreateCollector($row['collector_name'] ?? 'UNKNOWN COLLECTOR');
+                    $staff->wasRecentlyCreated ? $this->stats['collectors_created']++ : $this->stats['collectors_found']++;
 
-                    // Client — find or auto-create
-                    $client = $this->findClient($row['payer_name']);
+                    $client = $this->findClient($row['payer_name'] ?? '');
                     if (!$client && !empty($row['payer_name'])) {
                         $client = $this->createClientFromPayer($row['payer_name']);
-                        $clientsCreated++;
+                        $this->stats['payers_created']++;
+                    } elseif ($client) {
+                        $this->stats['payers_found']++;
                     }
+
                     if (!$client) {
                         $client = $this->getOrCreateUnknownClient();
+                        $this->warnings[] = "Control {$row['control_number']}: Payer '{$row['payer_name']}' assigned to Unknown.";
                     }
 
-                    // Collection session (receipt batch)
-                    $session = CollectionSession::firstOrCreate(
-                        ['session_reference' => $row['receipt_number']],
-                        [
-                            'staff_id'     => $staff->id,
-                            'session_date' => $row['paid_at']->toDateString(),
-                            'status'       => 'submitted',
-                        ]
-                    );
+                    $session = $this->findOrCreateSession($row, $staff);
+                    $invoice = $this->matchInvoice($client, $row['paid_at']);
+                    $invoice ? $this->stats['invoices_matched']++ : $this->stats['invoices_not_found']++;
 
-                    // Match invoice for client+month if exists
-                    $invoice = Invoice::where('client_id', $client->id)
-                        ->where('billing_month', $row['paid_at']->month)
-                        ->where('billing_year',  $row['paid_at']->year)
-                        ->first();
-
-                    // Create payment
-                    Payment::create([
+                    $payment = Payment::create([
                         'control_number'        => $row['control_number'],
-                        'bill_reference'        => $row['bill_reference'],
+                        'bill_reference'        => $row['bill_reference'] ?? 'import-' . Str::uuid(),
                         'invoice_id'            => $invoice?->id,
                         'client_id'             => $client->id,
                         'collection_session_id' => $session->id,
                         'staff_id'              => $staff->id,
                         'amount'                => $row['amount'],
-                        'payer_name'            => $row['payer_name'],
-                        'payment_method'        => 'cash',
+                        'payer_name'            => $row['payer_name'] ?? 'Unknown',
+                        'payment_method'        => $row['payment_method'] ?? 'cash',
                         'status'                => 'paid',
                         'paid_at'               => $row['paid_at'],
+                        'metadata'              => json_encode([
+                            'import_source' => 'tausi_pos',
+                            'original_receipt' => $row['receipt_number'] ?? null,
+                            'imported_at' => now()->toDateTimeString(),
+                        ]),
                     ]);
 
-                    // Update session running total
+                    $importedIds[] = $payment->id;
                     $session->increment('actual_amount', $row['amount']);
 
-                    // Recalculate invoice balance
-                    if ($invoice) {
+                    if ($invoice && app()->bound(InvoiceService::class)) {
                         app(InvoiceService::class)->recalculate($invoice);
                     }
 
                     $imported++;
-
                 } catch (\Throwable $e) {
                     $this->errors[] = "Control {$row['control_number']}: {$e->getMessage()}";
+                    Log::error("Tausi import error", ['control' => $row['control_number'], 'error' => $e->getMessage()]);
                 }
             }
         });
 
         return [
-            'imported'        => $imported,
-            'skipped'         => $skipped,
-            'clients_created' => $clientsCreated,
-            'total_amount'    => collect($rows)->sum('amount'),
-            'errors'          => $this->errors,
+            'success'      => true,
+            'imported'     => $imported,
+            'skipped'      => $skipped,
+            'imported_ids' => $importedIds,
+            'total_amount' => collect($rows)->sum('amount'),
+            'stats'        => $this->stats,
+            'warnings'     => $this->warnings,
+            'errors'       => $this->errors,
+            'message'      => "{$imported} transactions imported, {$skipped} skipped.",
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PARSING
-    |--------------------------------------------------------------------------
-    */
+    // -------------------------------------------------------------------------
+    // Private: File Extraction
+    // -------------------------------------------------------------------------
+
     private function extractRows(string $filePath, string $mimeType): array
     {
         if (str_contains($mimeType, 'pdf')) {
@@ -161,141 +182,224 @@ class TausiPosImportService
         return $this->parseExcel($filePath);
     }
 
-    // PDF ─────────────────────────────────────────────────────────────────────
     private function parsePdf(string $filePath): array
     {
-        $parser = new \Smalot\PdfParser\Parser();
-        $pdf    = $parser->parseFile($filePath);
-        $text   = $pdf->getText();
-        return $this->parseTextRows($text);
+        try {
+            $parser = new Parser();
+            $pdf = $parser->parseFile($filePath);
+            $text = $pdf->getText();
+            $rows = $this->parseTextRows($text);
+            if (empty($rows)) {
+                $rows = $this->parseTextRowsLineByLine($text);
+            }
+            if (empty($rows)) {
+                $rows = $this->parsePdfTables($pdf);
+            }
+            return $rows;
+        } catch (\Exception $e) {
+            Log::error('PDF parsing failed: ' . $e->getMessage());
+            throw new \RuntimeException('Failed to parse PDF: ' . $e->getMessage());
+        }
     }
 
     private function parseTextRows(string $text): array
     {
         $rows = [];
-
-        // Normalise whitespace
         $text = preg_replace('/[ \t]+/', ' ', $text);
-
-        // Anchor: control numbers start with 526 and are 13 digits
+        $text = preg_replace('/\n\s*\n/', "\n", $text);
         preg_match_all('/\b(526\d{10})\b/', $text, $ctrlMatches, PREG_OFFSET_CAPTURE);
 
-        foreach ($ctrlMatches[1] as $match) {
+        foreach ($ctrlMatches[1] as $index => $match) {
             $controlNumber = $match[0];
-            $offset        = $match[1];
-
-            // Context window around control number
-            $start  = max(0, $offset - 350);
-            $window = substr($text, $start, 600);
-
+            $offset = $match[1];
+            $nextOffset = $ctrlMatches[1][$index + 1][1] ?? $offset + 900;
+            $window = substr($text, $offset, min($nextOffset - $offset + 100, 900));
             $row = $this->parseWindow($window, $controlNumber);
             if ($row) {
                 $rows[$controlNumber] = $row;
             }
         }
-
         return array_values($rows);
+    }
+
+    private function parseTextRowsLineByLine(string $text): array
+    {
+        $rows = [];
+        $lines = explode("\n", $text);
+        $current = null;
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+            if (preg_match('/\b(526\d{10})\b/', $line, $ctrlMatch)) {
+                if ($current && $current['amount'] > 0) $rows[] = $current;
+                $current = [
+                    'control_number' => $ctrlMatch[1],
+                    'bill_reference' => 'import-' . Str::uuid(),
+                    'receipt_number' => 'UNKNOWN',
+                    'amount' => 0,
+                    'collector_name' => 'UNKNOWN COLLECTOR',
+                    'payer_name' => null,
+                    'paid_at' => Carbon::now(),
+                    'payment_method' => 'cash',
+                ];
+            }
+            if ($current) {
+                if (preg_match('/\b([\d]{1,3}(?:,\d{3})*\.00)\b/', $line, $amtMatch)) {
+                    $current['amount'] = (float) str_replace(',', '', $amtMatch[1]);
+                }
+                if (preg_match('/([A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?)/i', $line, $dateMatch)) {
+                    try { $current['paid_at'] = Carbon::parse(str_replace(',', '', $dateMatch[1])); } catch (\Exception $e) {}
+                }
+                if (preg_match('/\b(993\d{9})\b/', $line, $receiptMatch)) {
+                    $current['receipt_number'] = $receiptMatch[1];
+                }
+            }
+        }
+        if ($current && $current['amount'] > 0) $rows[] = $current;
+        return $rows;
+    }
+
+    private function parsePdfTables($pdf): array
+    {
+        $rows = [];
+        foreach ($pdf->getPages() as $page) {
+            foreach ($page->getDataTables() as $table) {
+                foreach ($table as $tableRow) {
+                    if (empty($tableRow)) continue;
+                    $rowText = implode(' ', $tableRow);
+                    if (preg_match('/\b(526\d{10})\b/', $rowText, $ctrlMatch)) {
+                        $row = $this->parseWindow($rowText, $ctrlMatch[1]);
+                        if ($row) $rows[] = $row;
+                    }
+                }
+            }
+        }
+        return $rows;
     }
 
     private function parseWindow(string $window, string $controlNumber): ?array
     {
-        // Amount — e.g. 3,000.00 / 60,000.00 / 1,005,000.00
-        preg_match('/\b([\d]{1,3}(?:,\d{3})*\.00)\b/', $window, $amtMatch);
-        $amount = isset($amtMatch[1]) ? (float) str_replace(',', '', $amtMatch[1]) : 0;
+        $amount = $this->extractAmount($window);
         if ($amount <= 0) return null;
-
-        // UUID bill reference (may be split across lines — rejoin)
-        $windowClean = preg_replace('/[\s\-]+/', '', $window);
-        preg_match(
-            '/([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})/i',
-            $windowClean,
-            $uuidRaw
-        );
-        $billRef = isset($uuidRaw[1])
-            ? "{$uuidRaw[1]}-{$uuidRaw[2]}-{$uuidRaw[3]}-{$uuidRaw[4]}-{$uuidRaw[5]}"
-            : 'import-' . Str::uuid();
-
-        // Receipt number — 12 digits starting with 993
-        preg_match('/\b(993\d{9})\b/', $window, $receiptMatch);
-        $receipt = $receiptMatch[1] ?? 'UNKNOWN-' . substr($controlNumber, -6);
-
-        // Transaction date — "May 15, 2026 18:37:50" or "May 15, 2026 6:58:18"
-        preg_match(
-            '/([A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)/i',
-            $window, $dateMatch
-        );
-        try {
-            $paidAt = isset($dateMatch[1])
-                ? Carbon::parse(str_replace(',', '', $dateMatch[1]))
-                : Carbon::now();
-        } catch (\Exception) {
-            $paidAt = Carbon::now();
-        }
-
-        // Collector — all-caps name between "fee" and amount
-        preg_match(
-            '/(?:collection fee|Refuse collection fee)\s+([A-Z][A-Z\s\.]+?)\s+[\d,]+\.00/i',
-            $window, $collectorMatch
-        );
-        $collectorName = isset($collectorMatch[1])
-            ? trim($collectorMatch[1])
-            : 'SARAH S. SHECHAMBO'; // fallback to report collector
-
-        // Payer name — appears after PAI/PAID, before next date or end
-        preg_match('/PAI[D]?\s+([A-Z][A-Z\s]+?)(?=\s+[A-Z][a-z]{2}|\s+\d|$)/m', $window, $payerMatch);
-        $payerName = null;
-        if (isset($payerMatch[1])) {
-            $candidate = trim($payerMatch[1]);
-            // Reject if too short, matches collector, or looks like a date fragment
-            if (strlen($candidate) >= 3 && $candidate !== $collectorName
-                && !preg_match('/^\d/', $candidate)) {
-                $payerName = $candidate;
-            }
-        }
 
         return [
             'control_number' => $controlNumber,
-            'bill_reference' => $billRef,
-            'receipt_number' => $receipt,
+            'bill_reference' => $this->extractBillReference($window),
+            'receipt_number' => $this->extractReceiptNumber($window, $controlNumber),
             'amount'         => $amount,
-            'collector_name' => $collectorName,
-            'payer_name'     => $payerName,
-            'paid_at'        => $paidAt,
-            'item_name'      => 'Refuse collection fee',
-            'status'         => 'paid',
+            'collector_name' => $this->extractCollectorName($window),
+            'payer_name'     => $this->extractPayerName($window, $this->extractCollectorName($window)),
+            'paid_at'        => $this->extractDate($window),
+            'payment_method' => 'cash',
         ];
     }
 
-    // Excel ───────────────────────────────────────────────────────────────────
+    private function extractAmount(string $text): float
+    {
+        if (preg_match('/\b([\d]{1,3}(?:,\d{3})*\.00)\b/', $text, $m)) return (float) str_replace(',', '', $m[1]);
+        if (preg_match('/(?:TZS|TSh)\s*([\d,]+\.?\d*)/i', $text, $m)) return (float) str_replace(',', '', $m[1]);
+        if (preg_match('/([\d,]+\.?\d*)\s*\/=/', $text, $m)) return (float) str_replace(',', '', $m[1]);
+        return 0;
+    }
+
+    private function extractBillReference(string $window): string
+    {
+        $clean = preg_replace('/[\s\-]+/', '', $window);
+        if (preg_match('/([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})/i', $clean, $m)) {
+            return "{$m[1]}-{$m[2]}-{$m[3]}-{$m[4]}-{$m[5]}";
+        }
+        return 'import-' . Str::uuid();
+    }
+
+    private function extractReceiptNumber(string $window, string $controlNumber): string
+    {
+        if (preg_match('/\b(993\d{9})\b/', $window, $m)) return $m[1];
+        if (preg_match('/RCT[:\s]*(\d+)/i', $window, $m)) return 'RCT' . $m[1];
+        if (preg_match('/Receipt[:\s#]*(\d+)/i', $window, $m)) return $m[1];
+        return 'UNKNOWN-' . substr($controlNumber, -6);
+    }
+
+    private function extractDate(string $window): Carbon
+    {
+        if (preg_match('/([A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)/i', $window, $m)) {
+            try { return Carbon::parse(str_replace(',', '', $m[1])); } catch (\Exception $e) {}
+        }
+        if (preg_match('/(\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2})/', $window, $m)) {
+            try { return Carbon::parse($m[1]); } catch (\Exception $e) {}
+        }
+        if (preg_match('/\b(\d{10,13})\b/', $window, $m)) {
+            $ts = strlen($m[1]) === 13 ? $m[1] / 1000 : $m[1];
+            return Carbon::createFromTimestamp($ts);
+        }
+        return Carbon::now();
+    }
+
+    private function extractCollectorName(string $window): string
+    {
+        if (preg_match('/(?:collection fee|Refuse collection fee)\s+([A-Z][A-Z\s\.]+?)\s+[\d,]+\.00/i', $window, $m)) return trim($m[1]);
+        if (preg_match('/Collected\s+by[:\s]+([A-Z][A-Z\s\.]+)/i', $window, $m)) return trim($m[1]);
+        if (preg_match('/Collector[:\s]+([A-Z][A-Z\s\.]+)/i', $window, $m)) return trim($m[1]);
+        return 'SARAH S. SHECHAMBO';
+    }
+
+    private function extractPayerName(string $window, string $collectorName): ?string
+    {
+        if (preg_match('/PAI[D]?\s+([A-Z][A-Z\s\.\-]+?)(?=\s+[A-Z][a-z]{2}|\s+\d|\s*$)/m', $window, $m)) {
+            $c = trim($m[1]);
+            if ($this->isValidPayerName($c, $collectorName)) return $c;
+        }
+        if (preg_match('/([A-Z][A-Z\s\.]+?)\s+(?:TZS|TSh)\s*[\d,]+\.00/i', $window, $m)) {
+            $c = trim($m[1]);
+            if ($this->isValidPayerName($c, $collectorName)) return $c;
+        }
+        if (preg_match('/(?:Customer|Client|Payer)[:\s]+([A-Z][A-Z\s\.]+)/i', $window, $m)) {
+            $c = trim($m[1]);
+            if ($this->isValidPayerName($c, $collectorName)) return $c;
+        }
+        if (preg_match('/526\d{10}\s+([A-Z][A-Z\s\.]{3,})/', $window, $m)) {
+            $c = trim($m[1]);
+            if ($this->isValidPayerName($c, $collectorName)) return $c;
+        }
+        return null;
+    }
+
+    private function isValidPayerName(string $candidate, string $collectorName): bool
+    {
+        if (strlen($candidate) < 3) return false;
+        if (strcasecmp($candidate, $collectorName) === 0) return false;
+        $headers = ['CONTROL', 'NUMBER', 'AMOUNT', 'DATE', 'PAID', 'PAGE', 'TOTAL'];
+        if (in_array(strtoupper($candidate), $headers)) return false;
+        if (preg_match('/^\d/', $candidate)) return false;
+        if (preg_match('/^[A-Z][a-z]{2}\s+\d{1,2}$/', $candidate)) return false;
+        return true;
+    }
+
     private function parseExcel(string $filePath): array
     {
-        $rows        = [];
+        $rows = [];
         $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
-        $sheet       = $spreadsheet->getActiveSheet();
-        $headers     = [];
+        $sheet = $spreadsheet->getActiveSheet();
+        $headers = [];
 
         foreach ($sheet->getRowIterator() as $index => $row) {
             $cells = [];
             foreach ($row->getCellIterator() as $cell) {
                 $cells[] = trim((string) $cell->getFormattedValue());
             }
-
             if ($index === 1) {
                 $headers = array_map('strtolower', array_map('trim', $cells));
                 continue;
             }
-
             if (empty(array_filter($cells))) continue;
 
-            $count   = min(count($headers), count($cells));
-            $mapped  = array_combine(
+            $count = min(count($headers), count($cells));
+            $mapped = array_combine(
                 array_slice($headers, 0, $count),
                 array_slice($cells, 0, $count)
             );
 
-            $ctrl   = $mapped['control_number'] ?? $mapped['control no'] ?? $mapped['control'] ?? '';
+            $ctrl = $mapped['control_number'] ?? $mapped['control no'] ?? $mapped['control'] ?? '';
             $amount = (float) str_replace(',', '', $mapped['amount'] ?? 0);
-
             if (empty($ctrl) || $amount <= 0) continue;
 
             $rows[] = [
@@ -306,38 +410,64 @@ class TausiPosImportService
                 'collector_name' => strtoupper($mapped['collector'] ?? 'UNKNOWN COLLECTOR'),
                 'payer_name'     => $mapped['payer_name'] ?? $mapped['payer'] ?? null,
                 'paid_at'        => Carbon::parse($mapped['transaction_time'] ?? $mapped['date'] ?? now()),
-                'item_name'      => 'Refuse collection fee',
-                'status'         => 'paid',
+                'payment_method' => strtolower($mapped['payment_method'] ?? 'cash'),
             ];
         }
-
         return $rows;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | HELPERS
-    |--------------------------------------------------------------------------
-    */
+    // -------------------------------------------------------------------------
+    // Private: Helpers
+    // -------------------------------------------------------------------------
+
+    private function findOrCreateSession(array $row, Staff $staff): CollectionSession
+    {
+        $receipt = $row['receipt_number'] ?? 'UNKNOWN';
+        $session = CollectionSession::where('session_reference', $receipt)->first();
+        if ($session) return $session;
+
+        return CollectionSession::create([
+            'session_reference' => $receipt,
+            'staff_id'          => $staff->id,
+            'session_date'      => $row['paid_at']->toDateString(),
+            'status'            => 'submitted',
+            'expected_amount'   => 0,
+            'actual_amount'     => $row['amount'],
+        ]);
+    }
+
+    private function matchInvoice(Client $client, Carbon $date): ?Invoice
+    {
+        return Invoice::where('client_id', $client->id)
+            ->where('billing_month', $date->month)
+            ->where('billing_year', $date->year)
+            ->first();
+    }
+
     private function findClient(?string $payerName): ?Client
     {
         if (empty(trim((string) $payerName))) return null;
-
         $name = trim($payerName);
-
-        // Exact match first
         $client = Client::whereRaw('LOWER(name) = ?', [strtolower($name)])->first();
         if ($client) return $client;
-
-        // Starts-with match
-        return Client::whereRaw('LOWER(name) LIKE ?', [strtolower($name) . '%'])->first();
+        $client = Client::whereRaw('LOWER(name) LIKE ?', [strtolower($name) . '%'])->first();
+        if ($client) return $client;
+        $client = Client::whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($name) . '%'])->first();
+        if ($client) return $client;
+        $words = explode(' ', $name);
+        if (count($words) >= 2) {
+            $client = Client::where(function ($q) use ($words) {
+                foreach ($words as $word) if (strlen($word) >= 3) $q->orWhereRaw('LOWER(name) LIKE ?', ['%' . strtolower($word) . '%']);
+            })->first();
+            if ($client) return $client;
+        }
+        return null;
     }
 
     private function createClientFromPayer(string $payerName): Client
     {
-        $year  = now()->year;
+        $year = now()->year;
         $count = Client::whereYear('created_at', $year)->count() + 1;
-
         return Client::create([
             'client_number'  => sprintf('WCP-%d-%05d', $year, $count),
             'name'           => ucwords(strtolower(trim($payerName))),
@@ -351,29 +481,23 @@ class TausiPosImportService
 
     private function findOrCreateCollector(string $name): Staff
     {
-        // Match by user name
-        $staff = Staff::whereHas('user', fn($q) =>
-            $q->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower(trim($name)) . '%'])
-        )->first();
-
+        $name = trim($name);
+        $staff = Staff::whereHas('user', fn($q) => $q->whereRaw('LOWER(name) = ?', [strtolower($name)]))->first();
         if ($staff) return $staff;
-
-        // Fallback: use any existing staff
-        $staff = Staff::first();
+        $staff = Staff::whereHas('user', fn($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($name) . '%']))->first();
         if ($staff) return $staff;
-
-        // Last resort: create from name
+        $staff = Staff::where('role', 'collector')->first();
+        if ($staff) return $staff;
         return $this->createDefaultStaff($name);
     }
 
     private function createDefaultStaff(string $name): Staff
     {
         $email = Str::slug($name) . '@import.wcp';
-        $user  = User::firstOrCreate(
+        $user = User::firstOrCreate(
             ['email' => $email],
             ['name' => ucwords(strtolower($name)), 'password' => bcrypt(Str::random(16))]
         );
-
         return Staff::firstOrCreate(
             ['user_id' => $user->id],
             [
@@ -402,24 +526,28 @@ class TausiPosImportService
 
     private function getDefaultClientTypeId(): int
     {
-        return ClientType::first()?->id
-            ?? ClientType::create([
-                'name'                => 'Individual',
-                'category'            => 'residential',
-                'default_monthly_fee' => 3000,
-            ])->id;
+        return ClientType::first()?->id ?? ClientType::create([
+            'name' => 'Individual',
+            'category' => 'residential',
+            'default_monthly_fee' => 3000,
+        ])->id;
     }
 
     private function buildPreviewSummary(array $rows): array
     {
         $amounts = collect($rows)->pluck('amount');
         return [
+            'total_rows'   => count($rows),
             'total_amount' => $amounts->sum(),
             'min_amount'   => $amounts->min(),
             'max_amount'   => $amounts->max(),
             'avg_amount'   => round($amounts->avg() ?? 0, 0),
-            'collectors'   => collect($rows)->pluck('collector_name')->unique()->values(),
+            'collectors'   => collect($rows)->pluck('collector_name')->unique()->values()->toArray(),
             'receipts'     => collect($rows)->pluck('receipt_number')->unique()->count(),
+            'date_range'   => [
+                'from' => collect($rows)->min('paid_at')?->toDateString(),
+                'to'   => collect($rows)->max('paid_at')?->toDateString(),
+            ],
         ];
     }
 }

@@ -53,17 +53,29 @@
           </svg>
           Generate Payroll
         </Link>
-        <button class="action-btn">
+        <button class="action-btn" @click="exportPayslips">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
           </svg>
           Export Payslips
         </button>
-        <button class="action-btn">
+        <button class="action-btn" @click="exportBankFile">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          Export Bank File
+        </button>
+        <button class="action-btn" @click="processPayments">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/>
           </svg>
           Process Payments
+        </button>
+        <button class="action-btn" @click="showAdvanceModal = true">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+          </svg>
+          Request Advance
         </button>
       </div>
 
@@ -108,7 +120,11 @@
               <td>{{ formatCurrency(payment.deductions) }}</td>
               <td>{{ formatCurrency(payment.net_salary) }}</td>
               <td><span class="status-badge" :class="`status-badge--${payment.status}`">{{ payment.status }}</span></td>
-              <td><button class="table-action">View</button></td>
+              <td class="td-actions">
+                <button class="table-action" @click="downloadPayslip(payment)">PDF</button>
+                <button class="table-action" @click="emailPayslip(payment)">Email</button>
+                <button class="table-action">View</button>
+              </td>
             </tr>
             <tr v-if="salaryPayments.length === 0">
               <td colspan="8" style="text-align: center; color: #4a6357;">No payroll data found</td>
@@ -123,30 +139,59 @@
         <div class="summary-details">
           <div class="summary-row">
             <span class="summary-detail-label">Total Base Salary</span>
-            <span class="summary-detail-value">{{ formatCurrency(4250000) }}</span>
+            <span class="summary-detail-value">{{ formatCurrency(payrollSummary.total_base_salary || 0) }}</span>
           </div>
           <div class="summary-row">
             <span class="summary-detail-label">Total Overtime</span>
-            <span class="summary-detail-value">{{ formatCurrency(450000) }}</span>
+            <span class="summary-detail-value">{{ formatCurrency(payrollSummary.total_commissions || 0) }}</span>
           </div>
           <div class="summary-row">
             <span class="summary-detail-label">Total Deductions</span>
-            <span class="summary-detail-value">{{ formatCurrency(150000) }}</span>
+            <span class="summary-detail-value">{{ formatCurrency(payrollSummary.total_deductions || 0) }}</span>
           </div>
           <div class="summary-row summary-row--total">
             <span class="summary-detail-label">Net Payroll Total</span>
-            <span class="summary-detail-value">{{ formatCurrency(4550000) }}</span>
+            <span class="summary-detail-value">{{ formatCurrency(payrollSummary.total_net || 0) }}</span>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Salary Advance Modal -->
+    <Modal :show="showAdvanceModal" title="Request Salary Advance" @close="showAdvanceModal = false">
+      <form @submit.prevent="submitAdvance">
+        <div class="form-group">
+          <label>Staff Member</label>
+          <select v-model="advanceForm.staff_id" class="form-input" required>
+            <option value="">Select staff</option>
+            <option v-for="s in staff" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Amount (TZS)</label>
+          <input type="number" v-model="advanceForm.amount" class="form-input" required :max="maxAdvanceAmount" />
+          <small class="form-hint">Maximum: {{ formatCurrency(maxAdvanceAmount) }}</small>
+        </div>
+        <div class="form-group">
+          <label>Reason</label>
+          <textarea v-model="advanceForm.reason" class="form-input" rows="3" required></textarea>
+        </div>
+      </form>
+      <template #footer>
+        <button class="btn-secondary" @click="showAdvanceModal = false">Cancel</button>
+        <button class="btn-primary" @click="submitAdvance" :disabled="advanceForm.processing">
+          {{ advanceForm.processing ? 'Submitting...' : 'Submit Request' }}
+        </button>
+      </template>
+    </Modal>
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
 
 const props = defineProps({
   staff: {
@@ -164,7 +209,24 @@ const props = defineProps({
   year: {
     type: Number,
     default: null
+  },
+  payrollSummary: {
+    type: Object,
+    default: () => ({})
   }
+})
+
+const showAdvanceModal = ref(false)
+
+const advanceForm = useForm({
+  staff_id: '',
+  amount: '',
+  reason: ''
+})
+
+const maxAdvanceAmount = computed(() => {
+  const selectedStaff = props.staff.find(s => s.id === advanceForm.staff_id)
+  return selectedStaff ? (selectedStaff.base_salary * 0.5) : 0
 })
 
 const currentDate = ref(new Date(props.year || new Date().getFullYear(), (props.month || new Date().getMonth() + 1) - 1))
@@ -214,6 +276,45 @@ const formatCurrency = (value) => {
     currency: 'TZS',
     minimumFractionDigits: 0,
   }).format(value)
+}
+
+const exportPayslips = () => {
+  const month = currentDate.value.getMonth() + 1
+  const year = currentDate.value.getFullYear()
+  window.location.href = `/payroll/export?month=${month}&year=${year}&format=csv`
+}
+
+const processPayments = () => {
+  const month = currentDate.value.getMonth() + 1
+  const year = currentDate.value.getFullYear()
+  router.post('/payroll/process', { month, year })
+}
+
+const exportBankFile = () => {
+  const month = currentDate.value.getMonth() + 1
+  const year = currentDate.value.getFullYear()
+  window.location.href = `/payroll/export-bank?month=${month}&year=${year}`
+}
+
+const downloadPayslip = (payment) => {
+  window.location.href = `/payroll/${payment.id}/payslip`
+}
+
+const emailPayslip = (payment) => {
+  router.post(`/payroll/${payment.id}/email-payslip`, {}, {
+    onSuccess: () => {
+      alert('Payslip sent successfully')
+    }
+  })
+}
+
+const submitAdvance = () => {
+  advanceForm.post('/payroll/advance-request', {
+    onSuccess: () => {
+      showAdvanceModal.value = false
+      advanceForm.reset()
+    }
+  })
 }
 </script>
 
@@ -533,6 +634,75 @@ const formatCurrency = (value) => {
 .summary-row--total .summary-detail-value {
   font-size: 18px;
   color: #2d7a50;
+}
+
+.td-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4a6357;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a2e24;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf76;
+}
+
+.form-hint {
+  display: block;
+  font-size: 11px;
+  color: #7a9489;
+  margin-top: 4px;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #4a6357;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-secondary:hover {
+  border-color: #4caf76;
+  color: #2d7a50;
+}
+
+.btn-primary {
+  padding: 8px 16px;
+  background: #4caf76;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover {
+  background: #2d7a50;
 }
 
 @media (max-width: 1024px) {

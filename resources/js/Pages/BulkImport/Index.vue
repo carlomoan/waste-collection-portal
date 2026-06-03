@@ -162,30 +162,18 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import { useForm } from '@inertiajs/vue3'
 import { route } from 'ziggy-js'
 
+const props = defineProps({
+  recentImports: {
+    type: Array,
+    default: () => []
+  }
+})
+
 const importDate = ref(new Date().toISOString().split('T')[0])
 const selectedFile = ref(null)
 const isDragging = ref(false)
 const isSubmitting = ref(false)
 const fileInput = ref(null)
-
-const recentImports = ref([
-  {
-    id: 1,
-    file_name: 'daily_collections_2026-05-26.xlsx',
-    records_imported: 156,
-    status: 'completed',
-    imported_at: '2026-05-26 18:30:00',
-    imported_by: 'Admin User',
-  },
-  {
-    id: 2,
-    file_name: 'daily_collections_2026-05-25.xlsx',
-    records_imported: 142,
-    status: 'completed',
-    imported_at: '2026-05-25 17:45:00',
-    imported_by: 'Mary Kileo',
-  },
-])
 
 const handleFileChange = (event) => {
   const file = event.target.files[0]
@@ -236,7 +224,7 @@ const submitImport = () => {
 }
 
 const downloadTemplate = () => {
-  window.location.href = route('bulk-import.download-template')
+  window.location.href = '/bulk-import/download-template'
 }
 
 const formatDate = (dateString) => {

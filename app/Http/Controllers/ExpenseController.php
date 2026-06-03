@@ -4,191 +4,176 @@ namespace App\Http\Controllers;
 
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
+use App\Models\ExpenseApproval;
+use App\Models\BudgetAlert;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class ExpenseController extends Controller
 {
     public function index()
     {
-        try {
-            // Get expense categories with budget and spent amounts
-            $categories = ExpenseCategory::with(['expenses' => function ($query) {
-                $query->whereYear('expense_date', now()->year)
-                      ->whereMonth('expense_date', now()->month);
-            }])
-            ->get()
-            ->map(function ($category) {
-                $spent = $category->expenses->sum('amount') ?? 0;
-                return [
-                    'id' => $category->id ?? null,
-                    'name' => $category->name ?? 'Unknown',
-                    'budget' => 5000000, // Default budget - can be stored in categories table
-                    'spent' => (float) $spent,
-                ];
-            });
+        $categories = ExpenseCategory::with(['expenses' => function ($q) {
+            $q->whereYear('expense_date', now()->year)->whereMonth('expense_date', now()->month);
+        }])->get()->map(function ($cat) {
+            $spent = $cat->expenses->sum('amount');
+            $budget = $cat->monthly_budget ?? 0;
+            $alert = $budget > 0 && $spent > $budget * 0.9 ? 'warning' : null;
+            return ['id' => $cat->id, 'name' => $cat->name, 'budget' => $budget, 'spent' => $spent, 'alert' => $alert];
+        });
 
-            // Get recent expenses
-            $recentExpenses = Expense::with(['category', 'approvedBy'])
-                ->orderBy('expense_date', 'desc')
-                ->limit(10)
-                ->get()
-                ->map(function ($expense) {
-                    return [
-                        'id' => $expense->id ?? null,
-                        'description' => $expense->description ?? 'N/A',
-                        'category' => $expense->category->name ?? 'N/A',
-                        'amount' => (float) ($expense->amount ?? 0),
-                        'date' => $expense->expense_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
-                        'status' => $expense->status ?? 'pending',
-                        'approved_by' => $expense->approvedBy?->name ?? null,
-                    ];
-                });
-
-            return Inertia::render('Expenses/Index', [
-                'categories' => $categories,
-                'recentExpenses' => $recentExpenses,
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load expense data: ' . $e->getMessage());
-        }
-    }
-
-    public function create()
-    {
-        try {
-            $categories = ExpenseCategory::all()->map(function ($category) {
-                return [
-                    'id' => $category->id ?? null,
-                    'name' => $category->name ?? 'Unknown',
-                ];
-            });
-
-            return Inertia::render('Expenses/Create', [
-                'categories' => $categories,
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load expense form: ' . $e->getMessage());
-        }
+        return Inertia::render('Expenses/Index', [
+            'categories' => $categories,
+            'recentExpenses' => Expense::with(['category', 'approvals.approver'])
+                ->orderBy('expense_date', 'desc')->limit(20)->get(),
+            'pendingApprovals' => Expense::where('status', 'pending')->where('current_approval_level', 1)->count(),
+        ]);
     }
 
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $request->validate([
             'expense_category_id' => 'required|exists:expense_categories,id',
             'amount' => 'required|numeric|min:0',
             'expense_date' => 'required|date',
             'description' => 'required|string|max:500',
-            'receipt_number' => 'nullable|string|max:100',
+            'receipt' => 'nullable|file|image|max:2048',
+            'is_recurring' => 'boolean',
+            'recurrence_pattern' => 'nullable|required_if:is_recurring,true|in:daily,weekly,monthly',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
-
+        DB::beginTransaction();
         try {
-            Expense::create([
+            $receiptPath = $request->hasFile('receipt') ? $request->file('receipt')->store('expenses/receipts', 'public') : null;
+
+            $expense = Expense::create([
                 'expense_category_id' => $request->expense_category_id,
                 'amount' => $request->amount,
                 'expense_date' => $request->expense_date,
                 'description' => $request->description,
-                'receipt_number' => $request->receipt_number,
+                'receipt_path' => $receiptPath,
                 'status' => 'pending',
+                'current_approval_level' => 1,
                 'staff_id' => auth()->id(),
+                'is_recurring' => $request->is_recurring ?? false,
+                'recurrence_pattern' => $request->recurrence_pattern,
+                'parent_expense_id' => null,
             ]);
 
-            return redirect()->route('expenses.index')->with('success', 'Expense recorded successfully.');
+            if ($request->is_recurring) {
+                $this->createRecurringInstances($expense);
+            }
+
+            $this->checkBudgetAlert($expense);
+
+            DB::commit();
+            return redirect()->route('expenses.index')->with('success', 'Expense submitted for approval.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to record expense: ' . $e->getMessage());
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
         }
     }
 
-    public function edit($id)
+    private function createRecurringInstances(Expense $parent)
     {
-        try {
-            $expense = Expense::with('category')->findOrFail($id);
-            $categories = ExpenseCategory::all()->map(function ($category) {
-                return [
-                    'id' => $category->id ?? null,
-                    'name' => $category->name ?? 'Unknown',
-                ];
-            });
-
-            return Inertia::render('Expenses/Edit', [
-                'expense' => [
-                    'id' => $expense->id,
-                    'expense_category_id' => $expense->expense_category_id,
-                    'amount' => (float) $expense->amount,
-                    'expense_date' => $expense->expense_date?->format('Y-m-d'),
-                    'description' => $expense->description,
-                    'receipt_number' => $expense->receipt_number,
-                    'status' => $expense->status,
-                ],
-                'categories' => $categories,
+        // Create next 12 occurrences
+        for ($i = 1; $i <= 12; $i++) {
+            $nextDate = now()->parse($parent->expense_date)->add($parent->recurrence_pattern, $i);
+            Expense::create([
+                'expense_category_id' => $parent->expense_category_id,
+                'amount' => $parent->amount,
+                'expense_date' => $nextDate,
+                'description' => $parent->description.' (Recurring)',
+                'status' => 'pending',
+                'current_approval_level' => 1,
+                'staff_id' => $parent->staff_id,
+                'is_recurring' => true,
+                'recurrence_pattern' => $parent->recurrence_pattern,
+                'parent_expense_id' => $parent->id,
             ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load expense: ' . $e->getMessage());
         }
     }
 
-    public function update(Request $request, $id)
+    public function approve(Expense $expense, Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'expense_category_id' => 'required|exists:expense_categories,id',
-            'amount' => 'required|numeric|min:0',
-            'expense_date' => 'required|date',
-            'description' => 'required|string|max:500',
-            'receipt_number' => 'nullable|string|max:100',
-        ]);
+        $user = auth()->user();
+        $level = $expense->current_approval_level;
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
+        // Determine if user is authorized for this level
+        if (!$this->canApprove($user, $expense, $level)) {
+            return back()->with('error', 'You are not authorized to approve this expense.');
         }
 
+        DB::beginTransaction();
         try {
-            $expense = Expense::findOrFail($id);
-            $expense->update([
-                'expense_category_id' => $request->expense_category_id,
-                'amount' => $request->amount,
-                'expense_date' => $request->expense_date,
-                'description' => $request->description,
-                'receipt_number' => $request->receipt_number,
-            ]);
-
-            return redirect()->route('expenses.index')->with('success', 'Expense updated successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to update expense: ' . $e->getMessage());
-        }
-    }
-
-    public function approve($id)
-    {
-        try {
-            $expense = Expense::findOrFail($id);
-            $expense->update([
+            ExpenseApproval::create([
+                'expense_id' => $expense->id,
+                'approver_id' => $user->id,
+                'level' => $level,
                 'status' => 'approved',
-                'approved_by' => auth()->id(),
-                'approved_at' => now(),
+                'comments' => $request->comments,
             ]);
 
-            return back()->with('success', 'Expense approved successfully.');
+            $nextLevel = $level + 1;
+            if ($nextLevel <= $expense->category->approval_levels) {
+                $expense->update(['current_approval_level' => $nextLevel]);
+            } else {
+                $expense->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
+            }
+
+            DB::commit();
+            return back()->with('success', 'Expense approved.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to approve expense: ' . $e->getMessage());
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
         }
     }
 
-    public function reject($id)
+    private function canApprove($user, $expense, $level)
     {
-        try {
-            $expense = Expense::findOrFail($id);
-            $expense->update([
-                'status' => 'rejected',
-            ]);
+        // Logic: level 1 -> supervisor, level 2 -> manager, level 3 -> director
+        return $user->hasRole(['supervisor', 'manager', 'admin']);
+    }
 
-            return back()->with('success', 'Expense rejected successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to reject expense: ' . $e->getMessage());
+    private function checkBudgetAlert(Expense $expense)
+    {
+        $monthSpent = Expense::where('expense_category_id', $expense->expense_category_id)
+            ->whereMonth('expense_date', $expense->expense_date->month)
+            ->whereYear('expense_date', $expense->expense_date->year)
+            ->sum('amount');
+
+        $category = $expense->category;
+        if ($category->monthly_budget && $monthSpent > $category->monthly_budget * 0.9) {
+            BudgetAlert::create([
+                'expense_category_id' => $expense->expense_category_id,
+                'threshold' => 90,
+                'current_spent' => $monthSpent,
+                'budget' => $category->monthly_budget,
+                'notified_at' => now(),
+            ]);
+            // Notification::route('mail', 'finance@example.com')->notify(new BudgetExceededAlert($alert));
         }
+    }
+
+    public function analytics(Request $request)
+    {
+        $year = $request->input('year', now()->year);
+        $monthlyTrend = Expense::selectRaw('MONTH(expense_date) as month, SUM(amount) as total')
+            ->whereYear('expense_date', $year)
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+
+        $topCategories = Expense::with('category')
+            ->whereYear('expense_date', $year)
+            ->selectRaw('expense_category_id, SUM(amount) as total')
+            ->groupBy('expense_category_id')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        return response()->json(['monthlyTrend' => $monthlyTrend, 'topCategories' => $topCategories]);
     }
 }

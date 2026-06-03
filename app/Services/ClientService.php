@@ -10,10 +10,7 @@ class ClientService
 {
     public function applyCreditBalance(Client $client): void
     {
-        // Apply credit balance to outstanding invoices
-        if ($client->credit_balance <= 0) {
-            return;
-        }
+        if ($client->credit_balance <= 0) return;
 
         $outstandingInvoices = $client->invoices()
             ->whereIn('status', ['unpaid', 'partial', 'overdue'])
@@ -21,43 +18,30 @@ class ClientService
             ->orderBy('due_date')
             ->get();
 
-        $remainingCredit = $client->credit_balance;
+        $remaining = $client->credit_balance;
 
         foreach ($outstandingInvoices as $invoice) {
-            if ($remainingCredit <= 0) {
-                break;
-            }
-
-            $amountToApply = min($remainingCredit, $invoice->balance);
-            
-            DB::transaction(function () use ($invoice, $amountToApply, $client) {
-                // Create a payment record for the credit application
+            if ($remaining <= 0) break;
+            $apply = min($remaining, $invoice->balance);
+            DB::transaction(function () use ($invoice, $apply, $client) {
                 Payment::create([
                     'client_id' => $client->id,
                     'invoice_id' => $invoice->id,
-                    'amount' => $amountToApply,
+                    'amount' => $apply,
                     'paid_at' => now(),
                     'status' => 'paid',
                     'control_number' => 'CREDIT-' . $client->client_number,
                     'payer_name' => $client->name,
                 ]);
-
-                // Update client credit balance
-                $client->decrement('credit_balance', $amountToApply);
+                $client->decrement('credit_balance', $apply);
             });
-
-            $remainingCredit -= $amountToApply;
+            $remaining -= $apply;
         }
     }
 
     public function calculateMonthlyFee(Client $client): float
     {
-        // Use client's individual fee if set, otherwise use client type default
-        if ($client->monthly_fee > 0) {
-            return $client->monthly_fee;
-        }
-
-        return $client->clientType?->default_monthly_fee ?? 0;
+        return $client->monthly_fee > 0 ? $client->monthly_fee : ($client->clientType?->default_monthly_fee ?? 0);
     }
 
     public function suspendClient(Client $client, string $reason): void
@@ -88,6 +72,27 @@ class ClientService
             'outstanding_balance' => $client->outstanding_balance,
             'credit_balance' => $client->credit_balance,
             'last_payment' => $client->payments()->latest()->first(),
+        ];
+    }
+
+    public function generateStatement(Client $client, ?int $year = null, ?int $month = null): array
+    {
+        $query = $client->payments()->with('invoice')->orderBy('paid_at');
+        if ($year) $query->whereYear('paid_at', $year);
+        if ($month) $query->whereMonth('paid_at', $month);
+        $payments = $query->get();
+
+        $invoices = $client->invoices()
+            ->when($year, fn($q) => $q->where('billing_year', $year))
+            ->when($month, fn($q) => $q->where('billing_month', $month))
+            ->orderBy('due_date')
+            ->get();
+
+        return [
+            'client' => $client,
+            'invoices' => $invoices,
+            'payments' => $payments,
+            'balance_forward' => $client->outstanding_balance,
         ];
     }
 }

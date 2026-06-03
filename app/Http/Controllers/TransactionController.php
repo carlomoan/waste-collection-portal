@@ -3,103 +3,227 @@
 namespace App\Http\Controllers;
 
 use App\Models\Payment;
+use App\Models\Client;
+use App\Models\BankDeposit;
+use App\Models\AuditLog;
 use App\Services\TausiPosImportService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Smalot\PdfParser\Parser;
+use Spatie\LaravelPdf\Facades\Pdf;
+use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\QueryBuilder\AllowedFilter;
+use App\Mail\PaymentReceipt;
+use Illuminate\Support\Facades\Mail;
 
 class TransactionController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | Index — list all payments
-    |--------------------------------------------------------------------------
-    */
     public function index(Request $request)
     {
-        $payments = Payment::with(['client', 'staff.user', 'collectionSession'])
-            ->when($request->search, fn($q, $s) =>
-                $q->where('control_number', 'ilike', "%{$s}%")
-                  ->orWhereHas('client', fn($cq) => $cq->where('name', 'ilike', "%{$s}%"))
-                  ->orWhere('payer_name', 'ilike', "%{$s}%")
-            )
-            ->when($request->status, fn($q, $s) => $q->where('status', $s))
-            ->when($request->month, function ($q, $m) {
-                [$year, $month] = explode('-', $m);
-                $q->whereYear('paid_at', $year)->whereMonth('paid_at', $month);
-            })
-            ->when($request->collector_id, fn($q, $id) => $q->where('staff_id', $id))
-            ->latest('paid_at')
+        $payments = QueryBuilder::for(Payment::class)
+            ->with(['client', 'staff.user', 'collectionSession'])
+            ->allowedFilters([
+                AllowedFilter::callback('search', function ($query, $value) {
+                    $query->where(function ($q) use ($value) {
+                        $q->where('control_number', 'ilike', "%{$value}%")
+                          ->orWhere('payer_name', 'ilike', "%{$value}%")
+                          ->orWhereHas('client', fn($cq) => $cq->where('name', 'ilike', "%{$value}%"));
+                    });
+                }),
+                AllowedFilter::exact('status'),
+                AllowedFilter::callback('month', function ($query, $value) {
+                    [$year, $month] = explode('-', $value);
+                    $query->whereYear('paid_at', $year)->whereMonth('paid_at', $month);
+                }),
+                AllowedFilter::exact('collector_id', 'staff_id'),
+                AllowedFilter::exact('payment_method'),
+                AllowedFilter::scope('reconciled'),
+            ])
+            ->allowedSorts(['paid_at', 'amount', 'control_number'])
+            ->defaultSort('-paid_at')
             ->paginate(50)
-            ->withQueryString()
-            ->through(fn($p) => [
-                'id'             => $p->id,
-                'control_number' => $p->control_number,
-                'payer_name'     => $p->payer_name ?? $p->client?->name,
-                'client_id'      => $p->client_id,
-                'client_number'  => $p->client?->client_number,
-                'amount'         => $p->amount,
-                'status'         => $p->status,
-                'paid_at'        => $p->paid_at?->toDateTimeString(),
-                'collector'      => $p->staff?->user?->name,
-                'receipt'        => $p->collectionSession?->session_reference,
-            ]);
+            ->withQueryString();
 
         $summary = [
-            'total'       => Payment::count(),
-            'total_amount'=> Payment::where('status','paid')->sum('amount'),
-            'paid'        => Payment::where('status','paid')->count(),
-            'partial'     => 0, // placeholder
-            'unmatched'   => Payment::where('client_id', function($q) {
-                                $q->select('id')->from('clients')
-                                  ->where('client_number','WCP-UNKNOWN');
-                             })->count(),
+            'total' => Payment::count(),
+            'total_amount' => Payment::where('status', 'paid')->sum('amount'),
+            'paid' => Payment::where('status', 'paid')->count(),
+            'pending_reconciliation' => Payment::where('is_reconciled', false)->count(),
+            'unmatched' => Payment::whereHas('client', fn($q) => $q->where('client_number', 'WCP-UNKNOWN'))->count(),
         ];
 
+        $bankDeposits = BankDeposit::where('status', 'pending')->get()->map(fn($d) => [
+            'id' => $d->id,
+            'reference' => $d->reference,
+            'amount' => (float) $d->amount,
+            'date' => $d->deposit_date?->format('Y-m-d'),
+        ]);
+
         return Inertia::render('Transactions/Index', [
-            'payments'   => $payments,
-            'summary'    => $summary,
-            'filters'    => $request->only(['search','status','month','collector_id']),
-            'collectors' => \App\Models\Staff::with('user')
-                            ->get()
-                            ->map(fn($s) => ['id'=>$s->id,'name'=>$s->user?->name]),
+            'payments' => $payments,
+            'summary' => $summary,
+            'filters' => $request->only(['search', 'status', 'month', 'collector_id', 'payment_method', 'reconciled']),
+            'collectors' => \App\Models\Staff::with('user')->get()->map(fn($s) => ['id' => $s->id, 'name' => $s->user?->name]),
+            'bankDeposits' => $bankDeposits,
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Show single payment
-    |--------------------------------------------------------------------------
-    */
-    public function show(Payment $payment)
+    public function store(Request $request)
     {
-        return Inertia::render('Transactions/Show', [
-            'payment' => $payment->load(['client','staff.user','invoice','collectionSession']),
+        $validated = $request->validate([
+            'client_id' => 'required|exists:clients,id',
+            'amount' => 'required|numeric|min:1',
+            'payment_method' => 'required|in:cash,mobile_money,bank',
+            'paid_at' => 'required|date',
+            'payer_name' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
         ]);
+
+        DB::beginTransaction();
+        try {
+            // Generate unique control number
+            $controlNumber = $this->generateControlNumber();
+
+            $staff = auth()->user()->staff;
+
+            $session = \App\Models\CollectionSession::firstOrCreate(
+                ['session_reference' => 'MANUAL-'.now()->format('Ymd')],
+                ['staff_id' => $staff?->id ?? 1, 'session_date' => now()->toDateString(), 'status' => 'open']
+            );
+
+            $payment = Payment::create(array_merge($validated, [
+                'control_number' => $controlNumber,
+                'staff_id' => $staff?->id,
+                'collection_session_id' => $session->id,
+                'status' => 'paid',
+                'bill_reference' => 'INV-'.Str::random(8),
+                'is_reconciled' => $validated['payment_method'] === 'cash' ? true : false,
+            ]));
+
+            AuditLog::log('payment.create', 'Payment', $payment->id, $validated);
+
+            DB::commit();
+            return redirect()->route('transactions.show', $payment)->with('success', 'Payment recorded.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
+        }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Import page — show upload form
-    |--------------------------------------------------------------------------
-    */
+    private function generateControlNumber(): string
+    {
+        do {
+            $number = 'PAY-'.now()->format('Ymd').'-'.rand(1000, 9999);
+        } while (Payment::where('control_number', $number)->exists());
+        return $number;
+    }
+
+    public function refund(Payment $payment, Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'reason' => 'required|string|max:500',
+            'refund_amount' => 'required|numeric|min:0|max:'.$payment->amount,
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment->update([
+                'status' => 'refunded',
+                'refund_reason' => $request->reason,
+                'refunded_at' => now(),
+                'refund_amount' => $request->refund_amount,
+            ]);
+
+            AuditLog::log('payment.refund', 'Payment', $payment->id, $request->only('reason', 'refund_amount'));
+
+            DB::commit();
+            return back()->with('success', 'Payment refunded.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function sendReceiptEmail(Payment $payment)
+    {
+        if (!$payment->client || !$payment->client->email) {
+            return back()->with('error', 'Client email not found.');
+        }
+
+        Mail::to($payment->client->email)->send(new PaymentReceipt($payment));
+        return back()->with('success', 'Receipt sent to '.$payment->client->email);
+    }
+
+    public function reconcileWithBank(Request $request)
+    {
+        $request->validate([
+            'deposit_id' => 'required|exists:bank_deposits,id',
+            'payment_ids' => 'required|array',
+            'payment_ids.*' => 'exists:payments,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $deposit = BankDeposit::findOrFail($request->deposit_id);
+            $total = Payment::whereIn('id', $request->payment_ids)->sum('amount');
+
+            if (abs($total - $deposit->amount) > 0.01) {
+                throw new \Exception('Total payment amount does not match deposit amount.');
+            }
+
+            Payment::whereIn('id', $request->payment_ids)->update([
+                'is_reconciled' => true,
+                'reconciled_at' => now(),
+                'bank_deposit_id' => $deposit->id,
+            ]);
+
+            $deposit->update(['status' => 'confirmed', 'reconciled_at' => now()]);
+
+            AuditLog::log('payment.reconcile', 'BankDeposit', $deposit->id, ['payment_ids' => $request->payment_ids]);
+
+            DB::commit();
+            return response()->json(['success' => true, 'message' => 'Reconciliation completed.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function exportBatch(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        $payments = Payment::whereIn('id', $ids)->with(['client', 'staff.user'])->get();
+
+        return Pdf::view('pdf.transactions-batch', ['payments' => $payments])
+            ->landscape()
+            ->download('payments-'.now()->format('Ymd_His').'.pdf');
+    }
+
+    /**
+     * Show the import page.
+     */
     public function importPage()
     {
         return Inertia::render('Transactions/Import');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Preview — parse file, return rows WITHOUT saving (Step 2)
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Preview parsed data from an uploaded file (Step 2 of import wizard).
+     */
     public function preview(Request $request)
     {
         $request->validate([
             'file' => [
                 'required',
                 'file',
-                'max:10240', // 10MB
+                'max:10240',
                 'mimetypes:application/pdf,'
                     . 'application/vnd.ms-excel,'
                     . 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
@@ -112,19 +236,44 @@ class TransactionController extends Controller
         $fullPath = Storage::disk('local')->path($path);
         $mime     = $file->getMimeType();
 
+        // Handle PDF files directly using Smalot PDF Parser
+        if ($mime === 'application/pdf') {
+            try {
+                $parser = new Parser();
+                $pdf = $parser->parseFile($fullPath);
+                $text = $pdf->getText();
+                
+                // Parse the extracted text using your Tausi service
+                $result = app(TausiPosImportService::class)->previewFromText($text);
+                
+                // Store for later import
+                session(['import_temp_path' => $path, 'import_mime' => $mime]);
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $result,
+                    'message' => 'PDF parsed successfully',
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to parse PDF: ' . $e->getMessage(),
+                ], 422);
+            }
+        }
+
+        // For Excel/CSV files, use the existing service
         $result = app(TausiPosImportService::class)->preview($fullPath, $mime);
 
-        // Keep temp path in session for the confirm step
+        // Keep temp file for the confirm step
         session(['import_temp_path' => $path, 'import_mime' => $mime]);
 
         return response()->json($result);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Confirm import — actually write to DB (Step 3)
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Confirm and execute the import (Step 3 of import wizard).
+     */
     public function confirmImport(Request $request)
     {
         $path = session('import_temp_path');
@@ -135,30 +284,48 @@ class TransactionController extends Controller
         }
 
         $fullPath = Storage::disk('local')->path($path);
-        $result   = app(TausiPosImportService::class)->import($fullPath, $mime);
+        
+        // Handle PDF files
+        if ($mime === 'application/pdf') {
+            try {
+                $parser = new Parser();
+                $pdf = $parser->parseFile($fullPath);
+                $text = $pdf->getText();
+                
+                $result = app(TausiPosImportService::class)->importFromText($text);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to import PDF: ' . $e->getMessage(),
+                ], 422);
+            }
+        } else {
+            $result = app(TausiPosImportService::class)->import($fullPath, $mime);
+        }
 
-        // Clean up temp file
+        // Store IDs of freshly imported payments for later PDF export
+        session(['last_imported_ids' => $result['imported_ids'] ?? []]);
+
+        // Clean up temporary file
         Storage::disk('local')->delete($path);
         session()->forget(['import_temp_path', 'import_mime']);
 
         return response()->json($result);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Export
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Export filtered payments as CSV.
+     */
     public function export(Request $request)
     {
         return response()->streamDownload(function () use ($request) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
-                'No.','Control Number','Payer Name','Client Number',
-                'Amount (TZS)','Collector','Receipt','Status','Date & Time',
+                'No.', 'Control Number', 'Payer Name', 'Client Number',
+                'Amount (TZS)', 'Collector', 'Receipt', 'Status', 'Date & Time',
             ]);
 
-            Payment::with(['client','staff.user','collectionSession'])
+            Payment::with(['client', 'staff.user', 'collectionSession'])
                 ->when($request->month, function ($q, $m) {
                     [$year, $month] = explode('-', $m);
                     $q->whereYear('paid_at', $year)->whereMonth('paid_at', $month);
@@ -171,7 +338,7 @@ class TransactionController extends Controller
                             $p->control_number,
                             $p->payer_name ?? $p->client?->name,
                             $p->client?->client_number,
-                            number_format($p->amount, 2),
+                            $p->amount,
                             $p->staff?->user?->name,
                             $p->collectionSession?->session_reference,
                             strtoupper($p->status),
@@ -186,51 +353,70 @@ class TransactionController extends Controller
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Create single payment manually
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Export filtered payments as PDF.
+     */
+    public function exportPdf(Request $request)
+    {
+        $payments = Payment::with(['client', 'staff.user', 'collectionSession'])
+            ->when($request->month, function ($q, $m) {
+                [$year, $month] = explode('-', $m);
+                $q->whereYear('paid_at', $year)->whereMonth('paid_at', $month);
+            })
+            ->when($request->collector_id, fn($q, $id) => $q->where('staff_id', $id))
+            ->when($request->search, fn($q, $s) =>
+                $q->where('control_number', 'ilike', "%{$s}%")
+                  ->orWhereHas('client', fn($cq) => $cq->where('name', 'ilike', "%{$s}%"))
+                  ->orWhere('payer_name', 'ilike', "%{$s}%")
+            )
+            ->latest('paid_at')
+            ->get();
+
+        return Pdf::view('pdf.transactions', [
+                'payments' => $payments,
+                'filters'  => $request->only(['month', 'collector_id', 'search']),
+            ])
+            ->landscape()
+            ->download('transactions-' . now()->format('Y-m-d') . '.pdf');
+    }
+
+    /**
+     * Export the just-imported transactions as PDF.
+     */
+    public function exportImportedPdf(Request $request)
+    {
+        $ids = session('last_imported_ids', []);
+        $payments = Payment::whereIn('id', $ids)->with(['client', 'staff.user'])->get();
+
+        return Pdf::view('pdf.imported-transactions', [
+                'payments' => $payments,
+                'title'    => 'Imported Transactions – ' . now()->format('d M Y'),
+            ])
+            ->landscape()
+            ->download('imported-transactions.pdf');
+    }
+
+    /**
+     * Download a single payment receipt as PDF.
+     */
+    public function downloadPdf(Payment $payment)
+    {
+        return Pdf::view('pdf.transaction-single', [
+                'payment' => $payment->load(['client', 'staff.user', 'collectionSession', 'invoice']),
+            ])
+            ->landscape()
+            ->download("transaction-{$payment->id}.pdf");
+    }
+
+    /**
+     * Show the form to create a manual payment.
+     */
     public function create(Request $request)
     {
         return Inertia::render('Transactions/Create', [
             'clients' => \App\Models\Client::active()
                         ->orderBy('name')
-                        ->get(['id','client_number','name','monthly_fee']),
+                        ->get(['id', 'client_number', 'name', 'monthly_fee']),
         ]);
-    }
-
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'client_id'      => 'required|exists:clients,id',
-            'amount'         => 'required|numeric|min:1',
-            'control_number' => 'required|string|unique:payments,control_number',
-            'bill_reference' => 'nullable|string',
-            'payer_name'     => 'nullable|string|max:255',
-            'payment_method' => 'required|in:cash,mobile_money,bank',
-            'paid_at'        => 'required|date',
-        ]);
-
-        $staff = auth()->user()->staff;
-
-        $session = \App\Models\CollectionSession::firstOrCreate(
-            ['session_reference' => 'MANUAL-' . now()->format('Ymd')],
-            [
-                'staff_id'     => $staff?->id ?? 1,
-                'session_date' => now()->toDateString(),
-                'status'       => 'open',
-            ]
-        );
-
-        $payment = Payment::create(array_merge($validated, [
-            'staff_id'              => $staff?->id ?? 1,
-            'collection_session_id' => $session->id,
-            'bill_reference'        => $validated['bill_reference'] ?? 'manual-' . \Str::uuid(),
-            'status'                => 'paid',
-        ]));
-
-        return redirect()->route('transactions.show', $payment)
-            ->with('success', 'Payment recorded successfully.');
     }
 }
