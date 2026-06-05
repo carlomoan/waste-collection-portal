@@ -1,29 +1,30 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\AttendanceController;
-use App\Http\Controllers\TransactionController;
-use App\Http\Controllers\ReportsController;
-use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\StaffController;
-use App\Http\Controllers\ExpenseController;
-use App\Http\Controllers\BankingController;
-use App\Http\Controllers\AuditController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\BulkImportController;
-use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\AnalyticsController;
-use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\ScheduleController;
-use App\Http\Controllers\DebtController;
-use App\Http\Controllers\ClientController;
-use App\Http\Controllers\FinanceController;
-use App\Http\Controllers\ZoneController;
-use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\CollectionSessionController;
-use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\BankingController;
+use App\Http\Controllers\BulkImportController;
+use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CollectionSessionController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DebtController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StaffController;
+use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\VehicleController;
+use App\Http\Controllers\ZoneController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -172,6 +173,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{auditLog}/restore', [AuditController::class, 'restore'])->name('restore');
         Route::post('/cleanup', [AuditController::class, 'cleanup'])->name('cleanup');
         Route::get('/export', [AuditController::class, 'export'])->name('export');
+    });
+
+    // User Management
+    Route::resource('users', UserController::class)->except(['create', 'edit', 'show']);
+    Route::prefix('users')->name('users.')->group(function () {
+        Route::patch('/{user}/roles', [UserController::class, 'updateRoles'])->name('roles');
+        Route::patch('/{user}/reset-password', [UserController::class, 'resetPassword'])->name('reset-password');
+        Route::patch('/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('toggle-status');
     });
 
     // Roles & Permissions
