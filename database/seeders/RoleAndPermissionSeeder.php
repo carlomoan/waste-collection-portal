@@ -2,74 +2,134 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
 
-class RolesAndPermissionsSeeder extends Seeder
+class RoleAndPermissionSeeder extends Seeder
 {
+    /**
+     * Seed roles and permissions matching the application's custom RBAC tables.
+     */
     public function run(): void
     {
-        // Permissions
         $permissions = [
-            // Clients
-            'clients.view', 'clients.create', 'clients.edit', 'clients.delete',
-            // Payments
-            'payments.view', 'payments.record', 'payments.reverse',
-            // Invoices
-            'invoices.view', 'invoices.generate', 'invoices.export',
-            // Debts
-            'debts.view', 'debts.apply_penalty', 'debts.write_off',
-            // Finance
-            'expenses.view', 'expenses.create', 'expenses.approve',
-            'salaries.view', 'salaries.process',
-            'banking.view', 'banking.record',
-            // Reports
-            'reports.collector_performance', 'reports.monthly',
-            'reports.yearly', 'reports.export',
-            // Staff & HR
-            'staff.view', 'staff.manage', 'attendance.view', 'attendance.manage',
-            // System
-            'settings.manage', 'users.manage', 'roles.manage', 'audit.view',
+            'Clients' => [
+                'clients.view' => 'View clients',
+                'clients.create' => 'Create clients',
+                'clients.edit' => 'Edit clients',
+                'clients.delete' => 'Delete clients',
+            ],
+            'Payments' => [
+                'payments.view' => 'View payments',
+                'payments.record' => 'Record payments',
+                'payments.reverse' => 'Reverse payments',
+            ],
+            'Invoices' => [
+                'invoices.view' => 'View invoices',
+                'invoices.generate' => 'Generate invoices',
+                'invoices.export' => 'Export invoices',
+            ],
+            'Finance' => [
+                'expenses.view' => 'View expenses',
+                'expenses.create' => 'Create expenses',
+                'expenses.approve' => 'Approve expenses',
+                'banking.view' => 'View banking',
+                'banking.record' => 'Record banking',
+            ],
+            'Reports' => [
+                'reports.monthly' => 'View monthly reports',
+                'reports.yearly' => 'View yearly reports',
+                'reports.export' => 'Export reports',
+            ],
+            'HR' => [
+                'staff.view' => 'View staff',
+                'staff.manage' => 'Manage staff',
+                'attendance.view' => 'View attendance',
+                'attendance.manage' => 'Manage attendance',
+            ],
+            'System' => [
+                'settings.manage' => 'Manage settings',
+                'users.manage' => 'Manage users',
+                'roles.manage' => 'Manage roles',
+                'audit.view' => 'View audit log',
+            ],
         ];
 
-        foreach ($permissions as $perm) {
-            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
+        $permissionIds = [];
+
+        foreach ($permissions as $group => $items) {
+            foreach ($items as $name => $description) {
+                $permission = Permission::updateOrCreate(
+                    ['name' => $name],
+                    ['group' => $group, 'description' => $description],
+                );
+                $permissionIds[$name] = $permission->id;
+            }
         }
 
-        // Roles
+        $allPermissionIds = array_values($permissionIds);
+
         $roles = [
-            'super_admin' => $permissions, // all
+            'super_admin' => [
+                'description' => 'Full access to every part of the system.',
+                'permissions' => $allPermissionIds,
+            ],
             'manager' => [
-                'clients.view','clients.create','clients.edit',
-                'payments.view','invoices.view','invoices.generate',
-                'debts.view','debts.apply_penalty',
-                'expenses.view','expenses.approve',
-                'salaries.view','banking.view','banking.record',
-                'reports.collector_performance','reports.monthly','reports.yearly','reports.export',
-                'staff.view','attendance.view','attendance.manage',
+                'description' => 'Operational management across collections and finance.',
+                'permissions' => $this->idsFor($permissionIds, [
+                    'clients.view', 'clients.create', 'clients.edit',
+                    'payments.view', 'invoices.view', 'invoices.generate',
+                    'expenses.view', 'expenses.approve', 'banking.view',
+                    'reports.monthly', 'reports.yearly', 'reports.export',
+                    'staff.view', 'attendance.view', 'attendance.manage',
+                ]),
             ],
             'accountant' => [
-                'clients.view','payments.view','invoices.view','invoices.export',
-                'debts.view','expenses.view','expenses.create',
-                'salaries.view','salaries.process','banking.view','banking.record',
-                'reports.monthly','reports.yearly','reports.export',
+                'description' => 'Handles finance, invoices and reconciliation.',
+                'permissions' => $this->idsFor($permissionIds, [
+                    'clients.view', 'payments.view', 'invoices.view', 'invoices.export',
+                    'expenses.view', 'expenses.create', 'banking.view', 'banking.record',
+                    'reports.monthly', 'reports.yearly', 'reports.export',
+                ]),
             ],
             'collector' => [
-                'clients.view','payments.view','payments.record',
-                'invoices.view','attendance.view',
+                'description' => 'Field collector recording payments and attendance.',
+                'permissions' => $this->idsFor($permissionIds, [
+                    'clients.view', 'payments.view', 'payments.record',
+                    'invoices.view', 'attendance.view',
+                ]),
             ],
-            'supervisor' => [
-                'clients.view','payments.view',
-                'invoices.view','debts.view',
-                'reports.collector_performance',
-                'staff.view','attendance.view','attendance.manage',
+            'viewer' => [
+                'description' => 'Read-only access to core records.',
+                'permissions' => $this->idsFor($permissionIds, [
+                    'clients.view', 'payments.view', 'invoices.view', 'reports.monthly',
+                ]),
             ],
-            'viewer' => ['clients.view','payments.view','invoices.view','reports.monthly'],
         ];
 
-        foreach ($roles as $roleName => $perms) {
-            $role = Role::firstOrCreate(['name' => $roleName]);
-            $role->syncPermissions($perms);
+        foreach ($roles as $name => $config) {
+            $role = Role::updateOrCreate(
+                ['name' => $name],
+                ['description' => $config['description']],
+            );
+            $role->permissions()->sync($config['permissions']);
         }
+    }
+
+    /**
+     * Map permission names to their ids.
+     *
+     * @param  array<string, int>  $permissionIds
+     * @param  array<int, string>  $names
+     * @return array<int, int>
+     */
+    private function idsFor(array $permissionIds, array $names): array
+    {
+        return collect($names)
+            ->map(fn (string $name) => $permissionIds[$name] ?? null)
+            ->filter()
+            ->values()
+            ->all();
     }
 }

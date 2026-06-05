@@ -362,6 +362,7 @@ const navGroups = [
   {
     label: 'System',
     items: [
+      { label: 'Users',       route: 'users.index',       icon: IconUsers },
       { label: 'Roles',       route: 'roles.index',       icon: IconShield },
       { label: 'Audit Log',   route: 'audit.index',      icon: IconAudit },
       { label: 'Settings',    route: 'settings.index',   icon: IconSettings },
