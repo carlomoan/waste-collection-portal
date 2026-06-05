@@ -197,6 +197,25 @@ class PayrollController extends Controller
         return back()->with('success', 'Payslip emailed.');
     }
 
+    public function export(Request $request)
+    {
+        $month = $request->query('month', now()->month);
+        $year = $request->query('year', now()->year);
+
+        $payments = SalaryPayment::where('pay_month', $month)->where('pay_year', $year)
+            ->with('staff.user')
+            ->get();
+
+        $csv = "Staff Name,Base Salary,Allowances,Commissions,Deductions,Net Salary,Status\n";
+        foreach ($payments as $p) {
+            $csv .= "{$p->staff->user->name},{$p->base_salary},{$p->allowances},{$p->commissions},{$p->deductions},{$p->net_salary},{$p->status}\n";
+        }
+
+        return response()->streamDownload(function () use ($csv) {
+            echo $csv;
+        }, "payroll_{$year}_{$month}.csv");
+    }
+
     public function exportBankFile(Request $request)
     {
         $month = $request->query('month', now()->month);
@@ -243,5 +262,14 @@ class PayrollController extends Controller
         $advance = SalaryAdvance::findOrFail($id);
         $advance->update(['status' => 'approved', 'approved_by' => auth()->id(), 'approved_at' => now()]);
         return back()->with('success', 'Advance approved.');
+    }
+
+    public function processPayments(Request $request)
+    {
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+        $count = SalaryPayment::where('pay_month', $month)->where('pay_year', $year)
+            ->where('status', 'pending')->update(['status' => 'paid', 'paid_at' => now()]);
+        return back()->with('success', "{$count} payments processed.");
     }
 }

@@ -4,13 +4,32 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Services\InvoiceService;
 use App\Services\ClientService;
 
 class Payment extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, LogsActivity;
+
+    protected $fillable = [
+        'control_number',
+        'receipt_number',
+        'pos_number',
+        'bill_reference',
+        'invoice_id',
+        'client_id',
+        'collection_session_id',
+        'staff_id',
+        'amount',
+        'payer_name',
+        'payment_method',
+        'status',
+        'paid_at',
+        'notes',
+        'metadata',
+    ];
 
     protected $casts = [
         'amount' => 'decimal:2',

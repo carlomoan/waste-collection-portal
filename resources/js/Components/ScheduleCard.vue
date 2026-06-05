@@ -30,25 +30,46 @@ defineProps({
 
 <style scoped>
 .schedule-card {
-  background: #ffffff; border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 10px; padding: 14px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faf9 100%);
+  border: 1.5px solid rgba(0,0,0,0.06);
+  border-radius: 14px; padding: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.schedule-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}
+
 .sched-day {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
-  color: #7a9489; margin-bottom: 4px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+  color: #7a9489; margin-bottom: 8px; font-weight: 600;
 }
+
 .sched-zone {
-  font-size: 13px; font-weight: 600; color: #1a2e24;
-  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  font-size: 15px; font-weight: 700; color: #1a2e24;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  letter-spacing: -0.2px;
 }
+
 .zone-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
+
 .sched-staff {
-  font-size: 11px; color: #4a6357;
-  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: #4a6357;
+  display: flex; align-items: center; gap: 6px;
+  font-weight: 500;
 }
+
 .sched-count {
-  font-size: 10px; color: #7a9489; margin-top: 6px;
+  font-size: 11px; color: #7a9489; margin-top: 8px;
+  font-weight: 600;
+  background: rgba(76, 175, 118, 0.08);
+  padding: 6px 10px;
+  border-radius: 8px;
+  display: inline-block;
 }
 </style>

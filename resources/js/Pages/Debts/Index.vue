@@ -15,6 +15,29 @@
       <StatCard label="Avg Debt / Client" :value="formatTZS(totals.avg_debt)"    accent="blue" />
     </div>
 
+    <!-- Aging Summary -->
+    <div class="aging-section">
+      <h3>Aging Summary</h3>
+      <div class="aging-grid">
+        <div class="aging-card aging-card--0-30">
+          <div class="aging-label">0-30 Days</div>
+          <div class="aging-value">{{ formatTZS(agingSummary['0-30'] || 0) }}</div>
+        </div>
+        <div class="aging-card aging-card--31-60">
+          <div class="aging-label">31-60 Days</div>
+          <div class="aging-value">{{ formatTZS(agingSummary['31-60'] || 0) }}</div>
+        </div>
+        <div class="aging-card aging-card--61-90">
+          <div class="aging-label">61-90 Days</div>
+          <div class="aging-value">{{ formatTZS(agingSummary['61-90'] || 0) }}</div>
+        </div>
+        <div class="aging-card aging-card--90-plus">
+          <div class="aging-label">90+ Days</div>
+          <div class="aging-value">{{ formatTZS(agingSummary['90+'] || 0) }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Filters -->
     <div class="filters-bar">
       <input v-model="search" class="search-input" placeholder="Search client name or number…" />
@@ -84,8 +107,10 @@
               </span>
             </td>
             <td class="td-actions">
-              <Link :href="route('clients.show', debt.client_id)" class="action-link">Client</Link>
-              <button class="action-link" @click="recordPartial(debt)">Pay</button>
+              <a :href="`/clients?search=${encodeURIComponent(debt.client_name ?? '')}`" class="action-link">Client</a>
+              <button class="action-link" @click="showPaymentPlanModal(debt)">Plan</button>
+              <button class="action-link" @click="sendReminder(debt)">Remind</button>
+              <button class="action-link action-link--danger" @click="showWriteOffModal(debt)">Write Off</button>
             </td>
           </tr>
           <tr v-if="filteredDebts.length === 0">
@@ -127,12 +152,59 @@
       </template>
     </Modal>
 
+    <!-- Payment Plan Modal -->
+    <Modal :show="showPaymentPlanModalFlag" @close="showPaymentPlanModalFlag = false" title="Create Payment Plan">
+      <form @submit.prevent="submitPaymentPlan">
+        <div class="form-group">
+          <label>Total Debt Amount (TZS)</label>
+          <input type="number" v-model="paymentPlanForm.total_debt" class="form-input" min="0" step="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>Number of Installments</label>
+          <input type="number" v-model="paymentPlanForm.installments" class="form-input" min="1" max="24" required>
+        </div>
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="date" v-model="paymentPlanForm.start_date" class="form-input" required>
+        </div>
+        <div class="plan-summary">
+          <div class="plan-summary-item">
+            <span class="ps-label">Installment Amount:</span>
+            <span class="ps-value">{{ formatTZS(paymentPlanForm.total_debt / paymentPlanForm.installments || 0) }}</span>
+          </div>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showPaymentPlanModalFlag = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="submitPaymentPlan" :disabled="paymentPlanForm.processing">
+          {{ paymentPlanForm.processing ? 'Creating...' : 'Create Plan' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Write Off Modal -->
+    <Modal :show="showWriteOffModalFlag" @close="showWriteOffModalFlag = false" title="Write Off Debt">
+      <form @submit.prevent="submitWriteOff">
+        <div class="form-group">
+          <label>Reason for Write-off</label>
+          <textarea v-model="writeOffForm.reason" class="form-input" rows="4" required placeholder="Explain why this debt is being written off..."></textarea>
+        </div>
+        <p class="write-off-warning">This will permanently write off the debt. This action cannot be undone.</p>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showWriteOffModalFlag = false">Cancel</button>
+        <button class="modal-btn modal-btn--danger" @click="submitWriteOff" :disabled="writeOffForm.processing">
+          {{ writeOffForm.processing ? 'Writing Off...' : 'Write Off' }}
+        </button>
+      </template>
+    </Modal>
+
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { router } from '@inertiajs/vue3'
 import AppLayout   from '@/Layouts/AppLayout.vue'
 import AlertBanner from '@/Components/AlertBanner.vue'
 import StatCard    from '@/Components/StatCard.vue'
@@ -142,6 +214,7 @@ import { useForm } from '@inertiajs/vue3'
 const props = defineProps({
   debts:  { type: Array,  default: () => [] },
   totals: { type: Object, default: () => ({ outstanding: 0, penalties: 0, avg_debt: 0 }) },
+  agingSummary: { type: Object, default: () => ({ '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 }) },
 })
 
 const search       = ref('')
@@ -150,11 +223,24 @@ const filterMonth  = ref('')
 const currentPage  = ref(1)
 const perPage      = 20
 const showPenaltyModal = ref(false)
+const showPaymentPlanModalFlag = ref(false)
+const showWriteOffModalFlag = ref(false)
+const selectedDebt = ref(null)
 
 const penaltyForm = useForm({
   penalty_percentage: 10,
   apply_to_all: true,
   notes: ''
+})
+
+const paymentPlanForm = useForm({
+  total_debt: 0,
+  installments: 1,
+  start_date: ''
+})
+
+const writeOffForm = useForm({
+  reason: ''
 })
 
 const filteredDebts = computed(() => props.debts.filter(d => {
@@ -191,6 +277,48 @@ const submitPenalties = () => {
 
 const exportDebts    = () => window.location.href = route('debts.export')
 const recordPartial  = (debt) => router.visit(route('payments.create', { invoice_id: debt.invoice_id }))
+
+const showPaymentPlanModal = (debt) => {
+  selectedDebt.value = debt
+  paymentPlanForm.total_debt = debt.outstanding
+  paymentPlanForm.start_date = new Date().toISOString().slice(0, 10)
+  showPaymentPlanModalFlag.value = true
+}
+
+const submitPaymentPlan = () => {
+  paymentPlanForm.post(`/clients/${selectedDebt.value.client_id}/payment-plan`, {
+    onSuccess: () => {
+      showPaymentPlanModalFlag.value = false
+      paymentPlanForm.reset()
+      selectedDebt.value = null
+    }
+  })
+}
+
+const sendReminder = (debt) => {
+  if (confirm(`Send payment reminder to ${debt.client_name}?`)) {
+    router.post(`/debts/remind/${debt.invoice_id}`, {}, {
+      onSuccess: () => {
+        router.reload()
+      }
+    })
+  }
+}
+
+const showWriteOffModal = (debt) => {
+  selectedDebt.value = debt
+  showWriteOffModalFlag.value = true
+}
+
+const submitWriteOff = () => {
+  writeOffForm.post(`/debts/write-off/${selectedDebt.value.invoice_id}`, {
+    onSuccess: () => {
+      showWriteOffModalFlag.value = false
+      writeOffForm.reset()
+      selectedDebt.value = null
+    }
+  })
+}
 </script>
 
 <style scoped>
@@ -224,6 +352,58 @@ const recordPartial  = (debt) => router.visit(route('payments.create', { invoice
 .modal-btn--primary { background: #4caf76; color: white; }
 .modal-btn--danger { background: #c0392b; color: white; }
 .penalty-warning { color: #c0392b; font-size: 12px; margin-top: 12px; }
+.write-off-warning { color: #c0392b; font-size: 12px; margin-top: 12px; font-weight: 500; }
+
+.aging-section {
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.aging-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2e24;
+  margin-bottom: 12px;
+}
+.aging-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.aging-card {
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+}
+.aging-card--0-30 { background: #f0faf3; }
+.aging-card--31-60 { background: #fff7ed; }
+.aging-card--61-90 { background: #fef9c3; }
+.aging-card--90-plus { background: #fef0f0; }
+.aging-label {
+  font-size: 11px;
+  color: #4a6357;
+  margin-bottom: 4px;
+}
+.aging-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2e24;
+}
+.plan-summary {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+.plan-summary-item {
+  display: flex;
+  justify-content: space-between;
+}
+.ps-label { font-size: 12px; color: #4a6357; }
+.ps-value { font-size: 13px; font-weight: 600; color: #1a2e24; }
+.action-link--danger { color: #c0392b; }
 
 .card { background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; overflow: hidden; }
 .debts-table { width: 100%; border-collapse: collapse; font-size: 12px; }

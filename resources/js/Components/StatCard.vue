@@ -35,28 +35,42 @@ const subClass = computed(() => ({
 
 <style scoped>
 .stat-card {
-  background: #ffffff;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-left-width: 3px;
-  border-radius: 10px;
-  padding: 14px 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faf9 100%);
+  border: 1.5px solid rgba(0,0,0,0.06);
+  border-left-width: 4px;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}
+
 .stat-card--green  { border-left-color: #4caf76; }
 .stat-card--amber  { border-left-color: #f5c842; }
 .stat-card--red    { border-left-color: #c0392b; }
 .stat-card--blue   { border-left-color: #3b82f6; }
 
 .stat-label {
-  font-size: 10px; text-transform: uppercase;
-  letter-spacing: 0.8px; color: #7a9489; margin-bottom: 6px;
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; color: #7a9489; margin-bottom: 8px;
+  font-weight: 600;
 }
+
 .stat-value {
-  font-size: 22px; font-weight: 600; color: #1a2e24; line-height: 1;
+  font-size: 26px; font-weight: 800; color: #1a2e24; line-height: 1.1;
+  letter-spacing: -0.5px;
 }
+
 .stat-sub {
-  display: flex; align-items: center; gap: 3px;
-  font-size: 11px; color: #7a9489; margin-top: 4px;
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: #7a9489; margin-top: 6px;
+  font-weight: 500;
 }
-.stat-sub--up   { color: #4caf76; }
-.stat-sub--down { color: #c0392b; }
+
+.stat-sub--up   { color: #2d7a50; font-weight: 600; }
+.stat-sub--down { color: #c0392b; font-weight: 600; }
 </style>

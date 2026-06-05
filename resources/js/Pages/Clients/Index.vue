@@ -2,6 +2,13 @@
   <AppLayout title="Client Registry">
 
     <div class="page-actions">
+      <button class="btn-secondary" @click="exportClients">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+             stroke-width="2" stroke="currentColor" width="14" height="14">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+        </svg>
+        Export
+      </button>
       <button class="btn-primary" @click="showAddModal = true">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
              stroke-width="2" stroke="currentColor" width="14" height="14">
@@ -97,8 +104,10 @@
               </span>
             </td>
             <td class="td-actions">
-              <Link :href="route('clients.show', client.id)" class="action-link">View</Link>
-              <Link :href="route('clients.edit', client.id)" class="action-link">Edit</Link>
+              <button class="action-link" @click="openViewClient(client)">View</button>
+              <button class="action-link" @click="openEditClient(client)">Edit</button>
+              <button class="action-link" @click="showAddContactModal(client.id)">Contact</button>
+              <button class="action-link danger-link" @click="openDeleteClient(client)">Delete</button>
             </td>
           </tr>
           <tr v-if="filteredClients.length === 0">
@@ -113,6 +122,85 @@
         <button class="page-btn" :disabled="currentPage === totalPages" @click="currentPage++">Next →</button>
       </div>
     </div>
+
+    <!-- View Client Modal -->
+    <Modal :show="showViewModal" title="Client Details" @close="showViewModal = false">
+      <div v-if="viewingClient" class="detail-grid">
+        <div class="detail-row"><span class="detail-label">Client #</span><span class="detail-val mono">{{ viewingClient.client_number }}</span></div>
+        <div class="detail-row"><span class="detail-label">Name</span><span class="detail-val">{{ viewingClient.name }}</span></div>
+        <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-val">{{ viewingClient.phone ?? '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Email</span><span class="detail-val">{{ viewingClient.email ?? '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Zone</span><span class="detail-val">{{ viewingClient.zone_name ?? '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Monthly Fee</span><span class="detail-val">{{ formatTZS(viewingClient.monthly_fee) }} TZS</span></div>
+        <div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">{{ viewingClient.address ?? '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Status</span>
+          <span class="status-badge" :class="`status--${viewingClient.status}`">{{ viewingClient.status }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showViewModal = false">Close</button>
+        <button class="modal-btn modal-btn--primary" @click="openEditClient(viewingClient); showViewModal = false">Edit</button>
+      </template>
+    </Modal>
+
+    <!-- Edit Client Modal -->
+    <Modal :show="showEditModal" title="Edit Client" @close="showEditModal = false">
+      <form v-if="clientEditForm" @submit.prevent="submitClientEdit">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" v-model="clientEditForm.name" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" v-model="clientEditForm.phone" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" v-model="clientEditForm.email" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" v-model="clientEditForm.address" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label>Zone</label>
+          <select v-model="clientEditForm.zone_id" class="form-input">
+            <option value="">No Zone</option>
+            <option v-for="z in zones" :key="z.id" :value="z.id">{{ z.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Monthly Fee (TZS)</label>
+          <input type="number" v-model="clientEditForm.monthly_fee" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select v-model="clientEditForm.status" class="form-input">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showEditModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="submitClientEdit" :disabled="clientEditForm?.processing">
+          {{ clientEditForm?.processing ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Delete Client Modal -->
+    <Modal :show="showDeleteModal" title="Delete Client" @close="showDeleteModal = false">
+      <p class="modal-text">Delete client <strong>{{ deletingClient?.name }}</strong> [{{ deletingClient?.client_number }}]? This cannot be undone.</p>
+      <p class="modal-text" style="color:#c0392b;font-size:11px;">Note: clients with financial records cannot be deleted.</p>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showDeleteModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--danger" @click="submitClientDelete" :disabled="clientDeleteForm?.processing">
+          {{ clientDeleteForm?.processing ? 'Deleting...' : 'Delete' }}
+        </button>
+      </template>
+    </Modal>
 
     <!-- Add Client Modal -->
     <Modal :show="showAddModal" @close="showAddModal = false" title="Add Client">
@@ -168,15 +256,48 @@
       </template>
     </Modal>
 
+    <!-- Add Contact Modal -->
+    <Modal :show="showContactModal" @close="showContactModal = false" title="Add Contact">
+      <form @submit.prevent="addContact">
+        <div class="form-group">
+          <label>Contact Name</label>
+          <input type="text" v-model="contactForm.name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Position (Optional)</label>
+          <input type="text" v-model="contactForm.position" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" v-model="contactForm.phone" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Email (Optional)</label>
+          <input type="email" v-model="contactForm.email" class="form-input">
+        </div>
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" v-model="contactForm.is_primary" />
+            Set as Primary Contact
+          </label>
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showContactModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="addContact" :disabled="contactForm.processing">
+          {{ contactForm.processing ? 'Adding...' : 'Add Contact' }}
+        </button>
+      </template>
+    </Modal>
+
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
-import { useForm } from '@inertiajs/vue3'
 
 const props = defineProps({
   clients: { type: Array, default: () => [] },
@@ -184,6 +305,16 @@ const props = defineProps({
 })
 
 const showAddModal = ref(false)
+const showContactModal = ref(false)
+const showViewModal = ref(false)
+const showEditModal = ref(false)
+const showDeleteModal = ref(false)
+const selectedClientId = ref(null)
+const viewingClient = ref(null)
+const editingClient = ref(null)
+const deletingClient = ref(null)
+const clientEditForm = ref(null)
+const clientDeleteForm = ref(null)
 
 const addForm = useForm({
   name: '',
@@ -196,6 +327,14 @@ const addForm = useForm({
   status: 'active'
 })
 
+const contactForm = useForm({
+  name: '',
+  position: '',
+  phone: '',
+  email: '',
+  is_primary: false
+})
+
 const addClient = () => {
   addForm.post('/clients', {
     onSuccess: () => {
@@ -203,6 +342,69 @@ const addClient = () => {
       addForm.reset()
     }
   })
+}
+
+const showAddContactModal = (clientId) => {
+  selectedClientId.value = clientId
+  showContactModal.value = true
+}
+
+const addContact = () => {
+  contactForm.post(`/clients/${selectedClientId.value}/contacts`, {
+    onSuccess: () => {
+      showContactModal.value = false
+      contactForm.reset()
+      selectedClientId.value = null
+    }
+  })
+}
+
+const openViewClient = (c) => { viewingClient.value = c; showViewModal.value = true }
+
+const openEditClient = (c) => {
+  editingClient.value = c
+  clientEditForm.value = useForm({
+    name:         c.name ?? '',
+    client_number:c.client_number ?? '',
+    phone:        c.phone ?? '',
+    email:        c.email ?? '',
+    address:      c.address ?? '',
+    zone_id:      c.zone_id ?? '',
+    client_type_id: c.client_type_id ?? '',
+    monthly_fee:  c.monthly_fee ?? '',
+    status:       c.status ?? 'active',
+  })
+  showEditModal.value = true
+}
+
+const submitClientEdit = () => {
+  clientEditForm.value.patch(`/clients/${editingClient.value.id}`, {
+    onSuccess: () => {
+      showEditModal.value = false
+      editingClient.value = null
+      router.reload()
+    }
+  })
+}
+
+const openDeleteClient = (c) => {
+  deletingClient.value = c
+  clientDeleteForm.value = useForm({})
+  showDeleteModal.value = true
+}
+
+const submitClientDelete = () => {
+  clientDeleteForm.value.delete(`/clients/${deletingClient.value.id}`, {
+    onSuccess: () => {
+      showDeleteModal.value = false
+      deletingClient.value = null
+      router.reload()
+    }
+  })
+}
+
+const exportClients = () => {
+  window.location.href = '/clients/export'
 }
 
 const search       = ref('')
@@ -233,14 +435,24 @@ const initials  = n => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperC
 </script>
 
 <style scoped>
-.page-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.page-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; gap: 8px; }
 .btn-primary {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 14px; background: #2d7a50; color: #fff;
   border-radius: 8px; font-size: 12px; text-decoration: none;
   font-weight: 500; transition: background 0.15s;
+  border: none; cursor: pointer;
 }
 .btn-primary:hover { background: #1a4d32; }
+.btn-secondary {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; background: #fff; color: #4a6357;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px; font-size: 12px; text-decoration: none;
+  font-weight: 500; transition: all 0.15s;
+  cursor: pointer;
+}
+.btn-secondary:hover { border-color: #4caf76; color: #2d7a50; }
 
 .filters-bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .search-input {
@@ -294,8 +506,19 @@ const initials  = n => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperC
 .no-debt      { color: #7a9489; }
 .td-num       { font-family: monospace; font-size: 11px; color: #4a6357; }
 .td-actions   { display: flex; gap: 8px; }
-.action-link  { font-size: 11px; color: #4caf76; text-decoration: none; }
+.action-link  { font-size: 11px; color: #4caf76; text-decoration: none; cursor: pointer; background: none; border: none; padding: 0; }
 .action-link:hover { text-decoration: underline; }
+.danger-link { color: #c0392b !important; }
+.modal-text { font-size: 13px; color: #1a2e24; margin-bottom: 6px; }
+.detail-grid { display: flex; flex-direction: column; gap: 8px; }
+.detail-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 13px; }
+.detail-label { color: #7a9489; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px; }
+.detail-val { color: #1a2e24; font-weight: 500; text-align: right; }
+.detail-val.mono { font-family: monospace; }
+.modal-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+.modal-btn--cancel { background: #f5f5f5; color: #4a6357; }
+.modal-btn--primary { background: #4caf76; color: white; }
+.modal-btn--danger { background: #c0392b; color: white; }
 
 .status-badge { font-size: 9px; padding: 2px 7px; border-radius: 8px; font-weight: 600; text-transform: capitalize; }
 .status--active    { background: #f0faf3; color: #2d7a50; }
@@ -322,4 +545,11 @@ const initials  = n => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperC
 }
 .modal-btn--cancel { background: #f5f5f5; color: #4a6357; }
 .modal-btn--primary { background: #4caf76; color: white; }
+.checkbox-group label {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+}
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+}
 </style>

@@ -107,10 +107,11 @@
               <td>{{ staffMember.phone }}</td>
               <td><span class="status-badge" :class="`status-badge--${staffMember.is_active ? 'active' : 'inactive'}`">{{ staffMember.is_active ? 'Active' : 'Inactive' }}</span></td>
               <td class="td-actions">
-                <Link :href="`/staff/${staffMember.id}`" class="table-action">View</Link>
-                <button class="table-action" @click="showDocumentModal(staffMember)">Documents</button>
-                <button class="table-action" @click="showRatingModal(staffMember)">Rate</button>
-                <button v-if="staffMember.is_active" class="table-action table-action--danger" @click="archiveStaff(staffMember)">Archive</button>
+                <button class="table-action" @click="openViewStaffModal(staffMember)">View</button>
+                <button class="table-action" @click="openEditStaffModal(staffMember)">Edit</button>
+                <button class="table-action" @click="openDocumentModal(staffMember)">Docs</button>
+                <button class="table-action" @click="openRatingModal(staffMember)">Rate</button>
+                <button v-if="staffMember.is_active" class="table-action table-action--danger" @click="openArchiveModal(staffMember)">Archive</button>
                 <button v-else class="table-action" @click="restoreStaff(staffMember)">Restore</button>
               </td>
             </tr>
@@ -209,6 +210,76 @@
       </div>
     </div>
 
+    <!-- View Staff Modal -->
+    <Modal :show="showViewStaffModal" title="Staff Details" @close="showViewStaffModal = false">
+      <div v-if="viewingStaff" class="detail-grid">
+        <div class="detail-row"><span class="detail-label">Name</span><span class="detail-val">{{ viewingStaff.name }}</span></div>
+        <div class="detail-row"><span class="detail-label">Staff #</span><span class="detail-val mono">{{ viewingStaff.staff_number ?? 'STF-' + viewingStaff.id }}</span></div>
+        <div class="detail-row"><span class="detail-label">Role</span><span class="detail-val">{{ viewingStaff.role }}</span></div>
+        <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-val">{{ viewingStaff.phone }}</span></div>
+        <div class="detail-row"><span class="detail-label">Zone</span><span class="detail-val">{{ viewingStaff.zone ?? '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Base Salary</span><span class="detail-val">{{ viewingStaff.base_salary ? formatTZS(viewingStaff.base_salary) + ' TZS' : '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Status</span>
+          <span class="status-badge" :class="`status-badge--${viewingStaff.is_active ? 'active' : 'inactive'}`">
+            {{ viewingStaff.is_active ? 'Active' : 'Inactive' }}
+          </span>
+        </div>
+      </div>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showViewStaffModal = false">Close</button>
+        <button class="modal-btn modal-btn--primary" @click="openEditStaffModal(viewingStaff); showViewStaffModal = false">Edit</button>
+      </template>
+    </Modal>
+
+    <!-- Edit Staff Modal -->
+    <Modal :show="showEditStaffModal" title="Edit Staff Member" @close="showEditStaffModal = false">
+      <form v-if="staffEditForm" @submit.prevent="submitStaffEdit">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" v-model="staffEditForm.name" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" v-model="staffEditForm.phone" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select v-model="staffEditForm.role" class="form-input">
+            <option value="collector">Collector</option>
+            <option value="driver">Driver</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Zone</label>
+          <select v-model="staffEditForm.zone_id" class="form-input">
+            <option value="">No Zone</option>
+            <option v-for="zone in zones" :key="zone.id" :value="zone.id">{{ zone.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Base Salary (TZS)</label>
+          <input type="number" v-model="staffEditForm.base_salary" class="form-input" />
+        </div>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showEditStaffModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="submitStaffEdit" :disabled="staffEditForm?.processing">
+          {{ staffEditForm?.processing ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Archive Confirm Modal -->
+    <Modal :show="showArchiveModal" title="Archive Staff" @close="showArchiveModal = false">
+      <p class="modal-text">Archive <strong>{{ archivingStaff?.name }}</strong>? They will be marked inactive.</p>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showArchiveModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--danger" @click="confirmArchive">✓ Archive</button>
+      </template>
+    </Modal>
+
     <!-- Add Staff Modal -->
     <Modal :show="showAddModal" @close="showAddModal = false" title="Add Staff">
       <form @submit.prevent="addStaff">
@@ -264,7 +335,7 @@
     </Modal>
 
     <!-- Document Upload Modal -->
-    <Modal :show="showDocumentModal" @close="showDocumentModal = false" title="Upload Document">
+    <Modal :show="showDocumentModalOpen" @close="showDocumentModalOpen = false" title="Upload Document">
       <form @submit.prevent="uploadDocument">
         <div class="form-group">
           <label>Document Type</label>
@@ -285,7 +356,7 @@
         </div>
       </form>
       <template #footer>
-        <button class="modal-btn modal-btn--cancel" @click="showDocumentModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--cancel" @click="showDocumentModalOpen = false">Cancel</button>
         <button class="modal-btn modal-btn--primary" @click="uploadDocument" :disabled="documentForm.processing">
           {{ documentForm.processing ? 'Uploading...' : 'Upload' }}
         </button>
@@ -293,7 +364,7 @@
     </Modal>
 
     <!-- Performance Rating Modal -->
-    <Modal :show="showRatingModal" @close="showRatingModal = false" title="Rate Performance">
+    <Modal :show="showRatingModalOpen" @close="showRatingModalOpen = false" title="Rate Performance">
       <form @submit.prevent="submitRating">
         <div class="form-group">
           <label>Rating (1-5)</label>
@@ -316,7 +387,7 @@
         </div>
       </form>
       <template #footer>
-        <button class="modal-btn modal-btn--cancel" @click="showRatingModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--cancel" @click="showRatingModalOpen = false">Cancel</button>
         <button class="modal-btn modal-btn--primary" @click="submitRating" :disabled="ratingForm.processing">
           {{ ratingForm.processing ? 'Submitting...' : 'Submit Rating' }}
         </button>
@@ -327,7 +398,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Link, router, useForm } from '@inertiajs/vue3'
+import { router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 
@@ -344,8 +415,15 @@ const props = defineProps({
 
 const showAddModal = ref(false)
 const showImportModal = ref(false)
-const showDocumentModal = ref(false)
-const showRatingModal = ref(false)
+const showDocumentModalOpen = ref(false)
+const showRatingModalOpen = ref(false)
+const showViewStaffModal = ref(false)
+const showEditStaffModal = ref(false)
+const showArchiveModal = ref(false)
+const viewingStaff = ref(null)
+const editingStaff = ref(null)
+const archivingStaff = ref(null)
+const staffEditForm = ref(null)
 const searchQuery = ref('')
 const filterDepartment = ref('')
 const filterStatus = ref('')
@@ -394,6 +472,8 @@ const initials = (name) => {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
+const formatTZS = v => new Intl.NumberFormat('sw-TZ', { minimumFractionDigits: 0 }).format(v ?? 0)
+
 const addStaff = () => {
   addForm.post('/staff', {
     onSuccess: () => {
@@ -420,10 +500,10 @@ const processImport = () => {
   })
 }
 
-const showDocumentModal = (staff) => {
+const openDocumentModal = (staff) => {
   selectedStaff.value = staff
   documentForm.reset()
-  showDocumentModal.value = true
+  showDocumentModalOpen.value = true
 }
 
 const uploadDocument = () => {
@@ -435,43 +515,68 @@ const uploadDocument = () => {
   
   router.post(`/staff/${selectedStaff.value.id}/documents`, formData, {
     onSuccess: () => {
-      showDocumentModal.value = false
+      showDocumentModalOpen.value = false
       documentForm.reset()
     }
   })
 }
 
-const showRatingModal = (staff) => {
+const openRatingModal = (staff) => {
   selectedStaff.value = staff
   ratingForm.reset()
   ratingForm.period = new Date().toISOString().slice(0, 7)
-  showRatingModal.value = true
+  showRatingModalOpen.value = true
 }
 
 const submitRating = () => {
-  router.post(`/staff/${selectedStaff.value.id}/rate-performance`, ratingForm.data(), {
+  router.post(`/staff/${selectedStaff.value.id}/rate`, ratingForm.data(), {
     onSuccess: () => {
-      showRatingModal.value = false
+      showRatingModalOpen.value = false
       ratingForm.reset()
     }
   })
 }
 
+const openViewStaffModal = (s) => { viewingStaff.value = s; showViewStaffModal.value = true }
+
+const openEditStaffModal = (s) => {
+  editingStaff.value = s
+  staffEditForm.value = useForm({
+    name:        s.name ?? '',
+    phone:       s.phone ?? '',
+    role:        s.role ?? '',
+    zone_id:     s.zone_id ?? '',
+    base_salary: s.base_salary ?? '',
+    national_id: s.national_id ?? '',
+  })
+  showEditStaffModal.value = true
+}
+
+const submitStaffEdit = () => {
+  staffEditForm.value.patch(`/staff/${editingStaff.value.id}`, {
+    onSuccess: () => {
+      showEditStaffModal.value = false
+      editingStaff.value = null
+      router.reload()
+    }
+  })
+}
+
+const openArchiveModal = (s) => { archivingStaff.value = s; showArchiveModal.value = true }
+
+const confirmArchive = () => {
+  router.patch(`/staff/${archivingStaff.value.id}/archive`, {}, {
+    onSuccess: () => { showArchiveModal.value = false; router.reload() }
+  })
+}
+
 const archiveStaff = (staff) => {
-  if (confirm(`Are you sure you want to archive ${staff.name}?`)) {
-    router.post(`/staff/${staff.id}/archive`, {}, {
-      onSuccess: () => {
-        router.reload()
-      }
-    })
-  }
+  router.patch(`/staff/${staff.id}/archive`, {}, { onSuccess: () => router.reload() })
 }
 
 const restoreStaff = (staff) => {
-  router.post(`/staff/${staff.id}/restore`, {}, {
-    onSuccess: () => {
-      router.reload()
-    }
+  router.patch(`/staff/${staff.id}/restore`, {}, {
+    onSuccess: () => router.reload()
   })
 }
 </script>
@@ -927,4 +1032,17 @@ const restoreStaff = (staff) => {
 .modal-btn--primary:hover {
   background: #2d7a50;
 }
+
+.modal-btn--danger { background: #c0392b; color: white; }
+.modal-btn--cancel { background: #f5f5f5; color: #4a6357; }
+.modal-text { font-size: 13px; color: #1a2e24; margin-bottom: 6px; }
+.detail-grid { display: flex; flex-direction: column; gap: 8px; }
+.detail-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 13px; }
+.detail-label { color: #7a9489; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px; }
+.detail-val { color: #1a2e24; font-weight: 500; text-align: right; }
+.detail-val.mono { font-family: monospace; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500; color: #1a2e24; }
+.form-input { width: 100%; padding: 7px 10px; border: 1px solid rgba(0,0,0,0.12); border-radius: 6px; font-size: 13px; box-sizing: border-box; }
+.form-input:focus { outline: none; border-color: #4caf76; }
 </style>

@@ -27,11 +27,10 @@ class ClientController extends Controller
             ->when($request->filled('zone_id'), fn($q) => $q->where('zone_id', $request->zone_id))
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->orderBy('name')
-            ->paginate(20)
-            ->withQueryString();
+            ->get();
 
         return Inertia::render('Clients/Index', [
-            'clients' => $clients,
+            'clients' => $clients->map(fn($c) => array_merge($c->toArray(), ['client_type' => $c->clientType?->name, 'zone_name' => $c->zone?->name])),
             'zones' => Zone::all(['id', 'name']),
             'clientTypes' => ClientType::all(['id', 'name']),
             'filters' => $request->only(['search', 'zone_id', 'status']),
@@ -63,37 +62,43 @@ class ClientController extends Controller
             $client = Client::create($request->all());
             AuditLog::log('client.create', 'Client', $client->id, $request->all());
             DB::commit();
-            return redirect()->route('clients.index')->with('success', 'Client created.');
+            return back()->with('success', 'Client created.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', $e->getMessage());
         }
     }
 
-    public function show(Client $client)
+    public function show(Client $client, Request $request)
     {
-        $client->load(['zone', 'clientType', 'contacts']);
-
-        $recentInvoices = Invoice::where('client_id', $client->id)
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+        $client->load(['zone', 'clientType']);
 
         $recentPayments = Payment::where('client_id', $client->id)
-            ->orderBy('paid_at', 'desc')
-            ->limit(10)
-            ->get();
+            ->orderBy('paid_at', 'desc')->limit(5)->get(['id','receipt_number','amount','status','paid_at']);
 
         $outstandingBalance = Invoice::where('client_id', $client->id)
-            ->whereIn('status', ['unpaid', 'partial', 'overdue'])
-            ->sum('balance');
+            ->whereIn('status', ['unpaid', 'partial', 'overdue'])->sum('balance');
 
-        return Inertia::render('Clients/Show', [
-            'client' => $client,
-            'recentInvoices' => $recentInvoices,
-            'recentPayments' => $recentPayments,
+        $payload = [
+            'client'             => $client,
+            'recentPayments'     => $recentPayments,
             'outstandingBalance' => (float) $outstandingBalance,
-        ]);
+        ];
+
+        if ($request->wantsJson()) {
+            return response()->json($payload);
+        }
+
+        return redirect()->route('clients.index');
+    }
+
+    public function edit(Client $client, Request $request)
+    {
+        $client->load(['zone', 'clientType']);
+        if ($request->wantsJson()) {
+            return response()->json(['client' => $client]);
+        }
+        return redirect()->route('clients.index');
     }
 
     public function update(Request $request, Client $client)
@@ -139,7 +144,7 @@ class ClientController extends Controller
             $client->delete();
             AuditLog::log('client.delete', 'Client', $client->id);
             DB::commit();
-            return redirect()->route('clients.index')->with('success', 'Client deleted.');
+            return back()->with('success', 'Client deleted.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', $e->getMessage());
@@ -193,5 +198,11 @@ class ClientController extends Controller
             fclose($file);
         };
         return response()->stream($callback, 200, $headers);
+    }
+
+    public function profile(Client $client)
+    {
+        $client->load(['zone', 'clientType']);
+        return Inertia::render('Clients/ClientProfile', ['client' => $client]);
     }
 }

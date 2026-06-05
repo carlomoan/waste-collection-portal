@@ -66,6 +66,15 @@
         </svg>
         Export Monthly Report
       </a>
+      <button class="qa-btn" @click="exportDashboard" title="Export full dashboard as PDF">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+             stroke-width="1.8" stroke="currentColor" width="14" height="14">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21
+               18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+        </svg>
+        Export Dashboard
+      </button>
 
       <Link href="/debts?status=active" class="qa-btn">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -117,6 +126,14 @@
         </svg>
         Import PDF / Excel
       </Link>
+      <button class="qa-btn" @click="showAlertsModal = true">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+             stroke-width="1.8" stroke="currentColor" width="14" height="14">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/>
+        </svg>
+        Configure Alerts
+      </button>
     </div>
 
     <!-- ── Charts row ─────────────────────────────────────────────────── -->
@@ -257,6 +274,50 @@
       </div>
     </div>
 
+    <!-- Alerts Configuration Modal -->
+    <Modal :show="showAlertsModal" @close="showAlertsModal = false" title="Configure Alerts">
+      <div class="alerts-form">
+        <div class="toggle-group">
+          <div class="toggle-info">
+            <div class="toggle-label">Unpaid Clients Alert</div>
+            <div class="toggle-description">Alert when clients have unpaid balances past grace period</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" v-model="alerts.unpaidClients">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-group">
+          <div class="toggle-info">
+            <div class="toggle-label">Low Collection Rate Alert</div>
+            <div class="toggle-description">Alert when collection rate falls below threshold</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" v-model="alerts.lowCollectionRate">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>Collection Rate Threshold (%)</label>
+          <input type="number" v-model="alerts.collectionThreshold" class="form-input" min="0" max="100">
+        </div>
+        <div class="toggle-group">
+          <div class="toggle-info">
+            <div class="toggle-label">Email Notifications</div>
+            <div class="toggle-description">Receive alerts via email</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" v-model="alerts.emailNotifications">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showAlertsModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="saveAlerts">Save Alerts</button>
+      </template>
+    </Modal>
+
   </AppLayout>
 </template>
 
@@ -275,6 +336,7 @@ import AlertBanner          from '@/Components/AlertBanner.vue'
 import TransactionRow       from '@/Components/TransactionRow.vue'
 import CollectorProgressRow from '@/Components/CollectorProgressRow.vue'
 import ScheduleCard         from '@/Components/ScheduleCard.vue'
+import Modal                from '@/Components/Modal.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -429,6 +491,27 @@ const doughnutOptions = {
 const formatTZS = v =>
   new Intl.NumberFormat('sw-TZ', { minimumFractionDigits: 0 }).format(v ?? 0)
 
+// ─── Alerts Configuration ───────────────────────────────────────────────────────
+const showAlertsModal = ref(false)
+const alerts = ref({
+  unpaidClients: true,
+  lowCollectionRate: true,
+  collectionThreshold: 70,
+  emailNotifications: true,
+})
+
+const exportDashboard = () => {
+  window.print()
+}
+
+const saveAlerts = () => {
+  router.post('/dashboard/alerts', alerts.value, {
+    onSuccess: () => {
+      showAlertsModal.value = false
+    }
+  })
+}
+
 const changeLabel = (pct, suffix) => {
   if (pct === null || pct === undefined) return suffix
   const sign = pct >= 0 ? '+' : ''
@@ -570,6 +653,128 @@ const rateColor = computed(() => {
 .rate-fill.green { background: #4caf76; }
 .rate-fill.amber { background: #f5c842; }
 .rate-fill.red   { background: #c0392b; }
+
+/* Alerts Modal */
+.alerts-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.toggle-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a2e24;
+}
+
+.toggle-description {
+  font-size: 12px;
+  color: #4a6357;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d1d5db;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #4caf76;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+}
+
+.modal-btn--cancel {
+  background: #f5f5f5;
+  color: #4a6357;
+}
+
+.modal-btn--primary {
+  background: #4caf76;
+  color: white;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2e24;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a2e24;
+  background: white;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf76;
+}
 
 /* Responsive */
 @media (max-width: 1200px) {

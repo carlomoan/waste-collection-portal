@@ -9,6 +9,13 @@ use Inertia\Inertia;
 
 class ProfileController extends Controller
 {
+    public function show()
+    {
+        return Inertia::render('Profile/UserProfile', [
+            'user' => auth()->user()->load('staff'),
+        ]);
+    }
+
     public function edit()
     {
         return Inertia::render('Profile/Edit', [
@@ -23,13 +30,18 @@ class ProfileController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $user->id,
+            'password' => 'nullable|string|min:8',
         ]);
 
         if ($validator->fails()) {
             return back()->withErrors($validator);
         }
 
-        $user->update($request->only('name', 'email'));
+        $data = $request->only('name', 'email');
+        if ($request->filled('password')) {
+            $data['password'] = Hash::make($request->password);
+        }
+        $user->update($data);
         return back()->with('success', 'Profile updated.');
     }
 

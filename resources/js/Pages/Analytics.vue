@@ -17,6 +17,25 @@
         >
           {{ period.label }}
         </button>
+        <button class="export-btn" @click="exportAnalytics">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="14" height="14">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          Export
+        </button>
+      </div>
+
+      <!-- Comparison Period Selector -->
+      <div class="comparison-section">
+        <label class="comparison-label">Compare with:</label>
+        <select v-model="comparePeriod" class="comparison-select" @change="applyComparison">
+          <option value="">No comparison</option>
+          <option value="previous">Previous period</option>
+          <option value="last_year">Same period last year</option>
+          <option value="custom">Custom range</option>
+        </select>
+        <input v-if="comparePeriod === 'custom'" type="date" v-model="customStartDate" class="comparison-date" placeholder="Start date">
+        <input v-if="comparePeriod === 'custom'" type="date" v-model="customEndDate" class="comparison-date" placeholder="End date">
       </div>
 
       <!-- KPI Cards -->
@@ -26,6 +45,7 @@
           <div class="kpi-value">{{ formatCurrency(metrics.totalRevenue || 0) }}</div>
           <div class="kpi-change" :class="metrics.revenueChange >= 0 ? 'kpi-change--positive' : 'kpi-change--negative'">
             {{ metrics.revenueChange >= 0 ? '+' : '' }}{{ metrics.revenueChange?.toFixed(1) || 0 }}% vs last period
+            <span v-if="compareMetrics" class="kpi-compare">| {{ formatCurrency(compareMetrics.totalRevenue || 0) }} comparison</span>
           </div>
         </div>
         <div class="kpi-card">
@@ -33,6 +53,7 @@
           <div class="kpi-value">{{ metrics.collectionRate?.toFixed(1) || 0 }}%</div>
           <div class="kpi-change" :class="metrics.collectionRateChange >= 0 ? 'kpi-change--positive' : 'kpi-change--negative'">
             {{ metrics.collectionRateChange >= 0 ? '+' : '' }}{{ metrics.collectionRateChange?.toFixed(1) || 0 }}% vs last period
+            <span v-if="compareMetrics" class="kpi-compare">| {{ compareMetrics.collectionRate?.toFixed(1) || 0 }}% comparison</span>
           </div>
         </div>
         <div class="kpi-card">
@@ -45,6 +66,7 @@
           <div class="kpi-value">{{ formatCurrency(metrics.outstandingDebt || 0) }}</div>
           <div class="kpi-change" :class="metrics.debtChange >= 0 ? 'kpi-change--negative' : 'kpi-change--positive'">
             {{ metrics.debtChange >= 0 ? '+' : '' }}{{ metrics.debtChange?.toFixed(1) || 0 }}% vs last period
+            <span v-if="compareMetrics" class="kpi-compare">| {{ formatCurrency(compareMetrics.outstandingDebt || 0) }} comparison</span>
           </div>
         </div>
       </div>
@@ -111,6 +133,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
 const props = defineProps({
@@ -150,6 +173,10 @@ const props = defineProps({
 })
 
 const activePeriod = ref('monthly')
+const comparePeriod = ref('')
+const customStartDate = ref('')
+const customEndDate = ref('')
+const compareMetrics = ref(null)
 
 const periods = [
   { key: 'daily', label: 'Daily' },
@@ -165,6 +192,41 @@ const formatCurrency = (value) => {
     currency: 'TZS',
     minimumFractionDigits: 0,
   }).format(value)
+}
+
+const applyComparison = () => {
+  if (!comparePeriod.value) {
+    compareMetrics.value = null
+    return
+  }
+  
+  const params = {
+    period: activePeriod.value,
+    compare: comparePeriod.value,
+  }
+  
+  if (comparePeriod.value === 'custom') {
+    params.start_date = customStartDate.value
+    params.end_date = customEndDate.value
+  }
+  
+  router.get('/analytics', params, {
+    preserveState: true,
+    onSuccess: (page) => {
+      compareMetrics.value = page.props.compareMetrics
+    }
+  })
+}
+
+const exportAnalytics = () => {
+  const params = {
+    period: activePeriod.value,
+  }
+  if (comparePeriod.value) {
+    params.compare = comparePeriod.value
+  }
+  
+  window.location.href = `/analytics/export?${new URLSearchParams(params).toString()}`
 }
 </script>
 
@@ -215,6 +277,71 @@ const formatCurrency = (value) => {
   background: #4caf76;
   color: white;
   border-color: #4caf76;
+}
+
+.export-btn {
+  margin-left: auto;
+  padding: 8px 16px;
+  background: #4caf76;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.export-btn:hover {
+  background: #2d7a50;
+}
+
+.comparison-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+}
+
+.comparison-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #4a6357;
+}
+
+.comparison-select {
+  padding: 6px 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #4a6357;
+  background: white;
+}
+
+.comparison-date {
+  padding: 6px 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #4a6357;
+  background: white;
+}
+
+.comparison-date:focus {
+  outline: none;
+  border-color: #4caf76;
+}
+
+.kpi-compare {
+  color: #7a9489;
+  font-size: 10px;
+  margin-left: 8px;
 }
 
 .kpi-grid {

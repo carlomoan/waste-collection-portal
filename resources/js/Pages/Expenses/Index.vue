@@ -171,7 +171,10 @@
 
     <!-- Manage Categories Modal -->
     <Modal :show="showCategoriesModal" @close="showCategoriesModal = false" title="Manage Categories">
-      <div class="categories-list">
+      <form @submit.prevent="submitCategory" class="category-form">
+        <div class="form-row"><input v-model="categoryForm.name" class="form-input" placeholder="Category name" required><input v-model="categoryForm.budget" class="form-input" type="number" step="0.01" placeholder="Budget limit" required><button type="submit" class="modal-btn modal-btn--primary" :disabled="categoryForm.processing">Add</button></div>
+      </form>
+      <div class="categories-list" style="margin-top:12px">
         <div v-for="cat in categories" :key="cat.id" class="category-item">
           <span>{{ cat.name }}</span>
           <span>{{ formatCurrency(cat.budget) }}</span>
@@ -234,6 +237,12 @@ const showCategoriesModal = ref(false)
 const showAnalyticsModal = ref(false)
 const currentYear = new Date().getFullYear()
 const analyticsData = ref({ monthlyTrend: [], topCategories: [] })
+
+const categoryForm = useForm({ name: '', budget: '' })
+
+const submitCategory = () => categoryForm.post('/expenses/categories', {
+  onSuccess: () => { categoryForm.reset(); router.reload() }
+})
 
 const addForm = useForm({
   description: '',

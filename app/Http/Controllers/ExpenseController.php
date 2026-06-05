@@ -176,4 +176,51 @@ class ExpenseController extends Controller
 
         return response()->json(['monthlyTrend' => $monthlyTrend, 'topCategories' => $topCategories]);
     }
+
+    public function show(Expense $expense)
+    {
+        return Inertia::render('Expenses/Show', [
+            'expense' => $expense->load(['category', 'approvals.approver']),
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        $expenses = Expense::with(['category', 'approvals.approver'])
+            ->when($request->filled('category_id'), fn($q) => $q->where('expense_category_id', $request->category_id))
+            ->when($request->filled('start_date'), fn($q) => $q->where('expense_date', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn($q) => $q->where('expense_date', '<=', $request->end_date))
+            ->orderBy('expense_date', 'desc')
+            ->get();
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="expenses.csv"',
+        ];
+
+        $callback = function () use ($expenses) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['ID', 'Category', 'Amount', 'Date', 'Description', 'Status']);
+            foreach ($expenses as $expense) {
+                fputcsv($file, [
+                    $expense->id,
+                    $expense->category->name,
+                    $expense->amount,
+                    $expense->expense_date,
+                    $expense->description,
+                    $expense->status,
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    public function storeCategory(Request $request)
+    {
+        $request->validate(['name' => 'required|string|max:255', 'budget' => 'required|numeric|min:0']);
+        ExpenseCategory::create($request->only('name', 'budget'));
+        return back()->with('success', 'Category created.');
+    }
 }

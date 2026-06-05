@@ -5,12 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Client extends Model
 {
-    use SoftDeletes, HasFactory;
+    use SoftDeletes, HasFactory, LogsActivity;
 
     protected $fillable = [
         'client_number', 'name', 'phone', 'email', 'zone_id',
@@ -48,9 +49,17 @@ class Client extends Model
     protected static function booted(): void
     {
         static::creating(function (Client $client) {
-            $year = now()->year;
-            $count = static::whereYear('created_at', $year)->count() + 1;
-            $client->client_number = sprintf('WCP-%d-%05d', $year, $count);
+            $year   = now()->year;
+            $prefix = "WCP-{$year}-";
+
+            // Use max of existing numbers (including soft-deleted) to avoid gaps/collisions
+            $maxNum = static::withTrashed()
+                ->where('client_number', 'like', $prefix . '%')
+                ->pluck('client_number')
+                ->map(fn($n) => (int) substr($n, strlen($prefix)))
+                ->max() ?? 0;
+
+            $client->client_number = sprintf('%s%05d', $prefix, $maxNum + 1);
         });
     }
 }

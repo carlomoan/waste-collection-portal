@@ -43,9 +43,20 @@
         </div>
         
         <form @submit.prevent="submitImport" class="import-form">
-          <div class="form-group">
-            <label>Import Date</label>
-            <input type="date" v-model="importDate" class="form-input" required>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Entity Type</label>
+              <select v-model="entityType" class="form-input" required>
+                <option value="clients">Clients</option>
+                <option value="staff">Staff</option>
+                <option value="payments">Payments</option>
+                <option value="collection_sessions">Collection Sessions</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Import Date</label>
+              <input type="date" v-model="importDate" class="form-input" required>
+            </div>
           </div>
           <div class="form-group">
             <label>Upload File</label>
@@ -91,10 +102,12 @@
           <thead>
             <tr>
               <th>File Name</th>
+              <th>Entity Type</th>
               <th>Records</th>
               <th>Status</th>
               <th>Import Date</th>
               <th>Imported By</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -107,10 +120,17 @@
                   {{ bulkImport.file_name }}
                 </div>
               </td>
+              <td>{{ formatEntityType(bulkImport.entity_type) }}</td>
               <td>{{ bulkImport.records_imported }}</td>
               <td><span class="status-badge" :class="getStatusClass(bulkImport.status)">{{ bulkImport.status }}</span></td>
               <td>{{ formatDate(bulkImport.imported_at) }}</td>
               <td>{{ bulkImport.imported_by }}</td>
+              <td class="td-actions">
+                <button v-if="bulkImport.status === 'completed'" class="table-action table-action--danger" @click="rollbackImport(bulkImport)">Rollback</button>
+              </td>
+            </tr>
+            <tr v-if="recentImports.length === 0">
+              <td colspan="7" style="text-align: center; color: #4a6357;">No imports found</td>
             </tr>
           </tbody>
         </table>
@@ -158,6 +178,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { useForm } from '@inertiajs/vue3'
 import { route } from 'ziggy-js'
@@ -166,9 +187,14 @@ const props = defineProps({
   recentImports: {
     type: Array,
     default: () => []
+  },
+  entityTypes: {
+    type: Array,
+    default: () => ['clients', 'staff', 'payments', 'collection_sessions']
   }
 })
 
+const entityType = ref('clients')
 const importDate = ref(new Date().toISOString().split('T')[0])
 const selectedFile = ref(null)
 const isDragging = ref(false)
@@ -204,6 +230,7 @@ const submitImport = () => {
   
   const formData = new FormData()
   formData.append('file', selectedFile.value)
+  formData.append('entity_type', entityType.value)
   formData.append('import_date', importDate.value)
   
   useForm({
@@ -224,7 +251,7 @@ const submitImport = () => {
 }
 
 const downloadTemplate = () => {
-  window.location.href = '/bulk-import/download-template'
+  window.location.href = `/bulk-import/download-template/${entityType.value}`
 }
 
 const formatDate = (dateString) => {
@@ -243,11 +270,27 @@ const getStatusClass = (status) => {
     case 'completed':
       return 'status-badge--success'
     case 'pending':
+    case 'processing':
       return 'status-badge--warning'
     case 'failed':
+    case 'rolled_back':
       return 'status-badge--error'
     default:
       return ''
+  }
+}
+
+const formatEntityType = (type) => {
+  return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
+const rollbackImport = (bulkImport) => {
+  if (confirm(`Rollback this import? This will delete ${bulkImport.records_imported} records. This action cannot be undone.`)) {
+    router.post(`/bulk-import/rollback/${bulkImport.id}`, {}, {
+      onSuccess: () => {
+        router.reload()
+      }
+    })
   }
 }
 </script>
@@ -523,6 +566,41 @@ const getStatusClass = (status) => {
 
 .imports-table tr:last-child td {
   border-bottom: none;
+}
+
+.td-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.table-action {
+  padding: 4px 10px;
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 4px;
+  font-size: 10px;
+  color: #4a6357;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.table-action:hover {
+  border-color: #4caf76;
+  color: #2d7a50;
+}
+
+.table-action--danger {
+  color: #c0392b;
+}
+
+.table-action--danger:hover {
+  border-color: #c0392b;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
 }
 
 .file-name {

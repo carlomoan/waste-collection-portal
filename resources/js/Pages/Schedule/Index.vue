@@ -6,6 +6,12 @@
       <button class="week-btn" @click="prevWeek">← Prev Week</button>
       <span class="week-label">Week {{ currentWeek }} · {{ weekRange }}</span>
       <button class="week-btn" @click="nextWeek">Next Week →</button>
+      <button class="week-btn week-btn--primary" @click="showGenerateModal = true">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="12" height="12">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+        </svg>
+        Generate Weekly Plan
+      </button>
     </div>
 
     <!-- Weekly grid -->
@@ -85,16 +91,42 @@
       </div>
     </div>
 
+    <!-- Generate Weekly Plan Modal -->
+    <Modal :show="showGenerateModal" @close="showGenerateModal = false" title="Generate Weekly Plan">
+      <form @submit.prevent="generateWeeklyPlan">
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="date" v-model="planForm.start_date" class="form-input" required>
+        </div>
+        <p class="plan-info">This will generate a collection route plan for the week starting from {{ planForm.start_date }}.</p>
+      </form>
+      <template #footer>
+        <button class="modal-btn modal-btn--cancel" @click="showGenerateModal = false">Cancel</button>
+        <button class="modal-btn modal-btn--primary" @click="generateWeeklyPlan" :disabled="planForm.processing">
+          {{ planForm.processing ? 'Generating...' : 'Generate Plan' }}
+        </button>
+      </template>
+    </Modal>
+
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import { router } from '@inertiajs/vue3'
+import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
 
 const props = defineProps({
   schedules: { type: Array, default: () => [] },
   zones:     { type: Array, default: () => [] },
+})
+
+const showGenerateModal = ref(false)
+
+const planForm = useForm({
+  start_date: new Date().toISOString().split('T')[0]
 })
 
 const today       = new Date()
@@ -162,6 +194,14 @@ const getSchedulesForDay = (date) => props.schedules.filter(s => s.date === date
 
 const prevWeek = () => weekOffset.value--
 const nextWeek = () => weekOffset.value++
+
+const generateWeeklyPlan = () => {
+  router.get('/schedules/plan/generate', { start_date: planForm.start_date }, {
+    onSuccess: () => {
+      showGenerateModal.value = false
+    }
+  })
+}
 </script>
 
 <style scoped>
@@ -173,6 +213,8 @@ const nextWeek = () => weekOffset.value++
   border-radius: 7px; font-size: 12px; color: #4a6357; background: #fff; cursor: pointer;
 }
 .week-btn:hover { border-color: #4caf76; color: #2d7a50; }
+.week-btn--primary { background: #4caf76; color: white; border-color: #4caf76; }
+.week-btn--primary:hover { background: #2d7a50; border-color: #2d7a50; }
 .week-label { font-size: 14px; font-weight: 600; color: #1a2e24; }
 
 .week-grid {
@@ -233,4 +275,55 @@ const nextWeek = () => weekOffset.value++
 .assign-row:last-child { border-bottom: none; }
 .assign-label { font-size: 10px; color: #7a9489; }
 .assign-val   { font-size: 11px; color: #1a2e24; font-weight: 500; }
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+}
+
+.modal-btn--cancel {
+  background: #f5f5f5;
+  color: #4a6357;
+}
+
+.modal-btn--primary {
+  background: #4caf76;
+  color: white;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2e24;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a2e24;
+  background: white;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf76;
+}
+
+.plan-info {
+  font-size: 12px;
+  color: #4a6357;
+  margin-top: 12px;
+}
 </style>

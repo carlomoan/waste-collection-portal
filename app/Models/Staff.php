@@ -5,11 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Staff extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, LogsActivity;
 
     protected $fillable = [
         'user_id',
@@ -89,9 +90,16 @@ class Staff extends Model
     {
         static::creating(function (Staff $staff) {
             $prefix = config('wcp.staff_prefix', 'WCP-STF');
-            $year = now()->year;
-            $count = static::whereYear('created_at', $year)->count() + 1;
-            $staff->staff_number = sprintf('%s-%d-%03d', $prefix, $year, $count);
+            $year   = now()->year;
+            $full   = "{$prefix}-{$year}-";
+
+            $maxNum = static::withTrashed()
+                ->where('staff_number', 'like', $full . '%')
+                ->pluck('staff_number')
+                ->map(fn($n) => (int) substr($n, strlen($full)))
+                ->max() ?? 0;
+
+            $staff->staff_number = sprintf('%s%03d', $full, $maxNum + 1);
         });
     }
 }

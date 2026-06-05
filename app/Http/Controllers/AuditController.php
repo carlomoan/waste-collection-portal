@@ -83,4 +83,15 @@ class AuditController extends Controller
 
         return back()->with('success', "Deleted {$deleted} audit logs older than {$days} days.");
     }
+
+    public function export(Request $request)
+    {
+        $logs = AuditLog::with('user')->latest('timestamp')->limit(5000)->get();
+        return response()->streamDownload(function () use ($logs) {
+            $f = fopen('php://output', 'w');
+            fputcsv($f, ['Timestamp','User','Action','Module','Record ID','Description','IP']);
+            foreach ($logs as $l) fputcsv($f, [$l->timestamp,$l->user?->name,$l->action,$l->module,$l->record_id,$l->description,$l->ip_address]);
+            fclose($f);
+        }, 'audit-logs.csv');
+    }
 }

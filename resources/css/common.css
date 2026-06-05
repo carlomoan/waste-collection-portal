@@ -1,0 +1,375 @@
+/* Common CSS Variables and Utilities for Waste Collection Portal */
+
+:root {
+  /* Primary Colors */
+  --color-primary: #4caf76;
+  --color-primary-dark: #2d7a50;
+  --color-primary-light: #1a4d32;
+  
+  /* Accent Colors */
+  --color-amber: #f5c842;
+  --color-amber-dark: #d4a520;
+  --color-red: #c0392b;
+  --color-red-dark: #962d22;
+  --color-blue: #3b82f6;
+  
+  /* Text Colors */
+  --color-text-primary: #1a2e24;
+  --color-text-secondary: #4a6357;
+  --color-text-muted: #7a9489;
+  
+  /* Background Colors */
+  --color-bg-white: #ffffff;
+  --color-bg-light: #f8faf9;
+  --color-bg-gradient-start: #ffffff;
+  --color-bg-gradient-end: #f8faf9;
+  
+  /* Border Colors */
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-light: rgba(0, 0, 0, 0.08);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 14px rgba(76, 175, 118, 0.3);
+  --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+  
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-full: 9999px;
+  
+  /* Transitions */
+  --transition-fast: 0.2s;
+  --transition-normal: 0.25s;
+  --transition-slow: 0.3s;
+  --easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Common Gradients */
+.gradient-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+}
+
+.gradient-background {
+  background: linear-gradient(135deg, var(--color-bg-gradient-start) 0%, var(--color-bg-gradient-end) 100%);
+}
+
+.gradient-amber {
+  background: linear-gradient(135deg, var(--color-amber) 0%, var(--color-amber-dark) 100%);
+}
+
+.gradient-red {
+  background: linear-gradient(135deg, var(--color-red) 0%, var(--color-red-dark) 100%);
+}
+
+.gradient-green-light {
+  background: linear-gradient(135deg, #d6f0df 0%, #b8e6d0 100%);
+}
+
+.gradient-amber-light {
+  background: linear-gradient(135deg, #fdf6e3 0%, #fef0d4 100%);
+}
+
+.gradient-red-light {
+  background: linear-gradient(135deg, #fef0f0 0%, #fee2e2 100%);
+}
+
+/* Common Card Styles */
+.card {
+  background: var(--color-bg-white);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal) var(--easing-smooth);
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.card-lift:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+/* Common Button Styles */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal) var(--easing-smooth);
+  background: var(--color-bg-white);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary {
+  background: var(--gradient-primary);
+  color: white;
+  border-color: transparent;
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary-light) 100%);
+  box-shadow: 0 6px 20px rgba(76, 175, 118, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-amber {
+  background: var(--gradient-amber);
+  color: #4a3000;
+  border-color: transparent;
+  box-shadow: 0 2px 4px rgba(245, 200, 66, 0.3);
+}
+
+/* Common Badge Styles */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: var(--radius-md);
+  font-size: 10px;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.badge-green {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  color: var(--color-primary-dark);
+  border: 1px solid #a8ddb8;
+}
+
+.badge-amber {
+  background: var(--gradient-amber-light);
+  color: #b88a00;
+  border: 1px solid var(--color-amber);
+}
+
+.badge-red {
+  background: var(--gradient-red-light);
+  color: var(--color-red);
+  border: 1px solid #fca5a5;
+}
+
+/* Common Avatar Styles */
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.avatar-sm {
+  width: 28px;
+  height: 28px;
+  font-size: 9px;
+}
+
+.avatar-md {
+  width: 36px;
+  height: 36px;
+  font-size: 11px;
+}
+
+.avatar-lg {
+  width: 38px;
+  height: 38px;
+  font-size: 12px;
+}
+
+.avatar-circle {
+  border-radius: 50%;
+}
+
+/* Common Progress Bar */
+.progress-bar {
+  height: 6px;
+  background: linear-gradient(90deg, #f0faf3 0%, #e8f5e9 100%);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s var(--easing-smooth);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.progress-fill-green {
+  background: var(--gradient-primary);
+  box-shadow: 0 2px 4px rgba(76, 175, 118, 0.3);
+}
+
+.progress-fill-amber {
+  background: var(--gradient-amber);
+  box-shadow: 0 2px 4px rgba(245, 200, 66, 0.3);
+}
+
+.progress-fill-red {
+  background: var(--gradient-red);
+  box-shadow: 0 2px 4px rgba(192, 57, 43, 0.3);
+}
+
+/* Common Typography */
+.text-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.text-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  letter-spacing: -0.5px;
+}
+
+.text-sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.text-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+}
+
+.text-body {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.text-small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+/* Common Layout Utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-gap-sm {
+  gap: 8px;
+}
+
+.flex-gap-md {
+  gap: 12px;
+}
+
+.flex-gap-lg {
+  gap: 16px;
+}
+
+/* Common Hover Effects */
+.hover-lift {
+  transition: all var(--transition-normal) var(--easing-smooth);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.hover-scale {
+  transition: all var(--transition-normal) var(--easing-smooth);
+}
+
+.hover-scale:hover {
+  transform: scale(1.05);
+}
+
+/* Common Row Item Styles */
+.row-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  transition: all var(--transition-fast);
+}
+
+.row-item:hover {
+  background: linear-gradient(90deg, transparent 0%, rgba(76, 175, 118, 0.03) 100%);
+  padding-left: 8px;
+  padding-right: 8px;
+  border-radius: 8px;
+}
+
+.row-item:last-child {
+  border-bottom: none;
+}
+
+/* Alert Banner Styles */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal) var(--easing-smooth);
+}
+
+.alert-banner:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.alert-banner-warning {
+  background: var(--gradient-amber-light);
+  border: 1.5px solid var(--color-amber);
+  color: #5a3e00;
+}
+
+.alert-banner-danger {
+  background: var(--gradient-red-light);
+  border: 1.5px solid #f5a5a5;
+  color: #7a1a1a;
+}
+
+.alert-banner-info {
+  background: linear-gradient(135deg, #f0faf3 0%, #e8f5e9 100%);
+  border: 1.5px solid #a8ddb8;
+  color: #1a4d32;
+}

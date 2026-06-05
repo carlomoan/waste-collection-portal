@@ -24,25 +24,46 @@ const visible = ref(true)
 
 <style scoped>
 .alert-banner {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; border-radius: 8px; font-size: 12px;
-  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-radius: 12px; font-size: 13px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.alert-banner:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
 .alert-banner--warning {
-  background: #fdf6e3; border: 1px solid #f5c842; color: #5a3e00;
+  background: linear-gradient(135deg, #fdf6e3 0%, #fef0d4 100%);
+  border: 1.5px solid #f5c842; color: #5a3e00;
 }
+
 .alert-banner--danger {
-  background: #fef0f0; border: 1px solid #f5a5a5; color: #7a1a1a;
+  background: linear-gradient(135deg, #fef0f0 0%, #fee2e2 100%);
+  border: 1.5px solid #f5a5a5; color: #7a1a1a;
 }
+
 .alert-banner--info {
-  background: #f0faf3; border: 1px solid #a8ddb8; color: #1a4d32;
+  background: linear-gradient(135deg, #f0faf3 0%, #e8f5e9 100%);
+  border: 1.5px solid #a8ddb8; color: #1a4d32;
 }
+
 .alert-icon { flex-shrink: 0; }
-.alert-text { flex: 1; }
+
+.alert-text { flex: 1; font-weight: 500; }
+
 .alert-dismiss {
   background: none; border: none; cursor: pointer;
-  color: inherit; opacity: 0.6; padding: 2px;
-  display: flex; align-items: center;
+  color: inherit; opacity: 0.5; padding: 6px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; transition: all 0.2s;
 }
-.alert-dismiss:hover { opacity: 1; }
+
+.alert-dismiss:hover { 
+  opacity: 1; 
+  background: rgba(0,0,0,0.08);
+  transform: scale(1.1);
+}
 </style>

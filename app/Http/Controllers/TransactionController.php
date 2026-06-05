@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Services\TausiPosImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -249,11 +250,7 @@ class TransactionController extends Controller
                 // Store for later import
                 session(['import_temp_path' => $path, 'import_mime' => $mime]);
                 
-                return response()->json([
-                    'success' => true,
-                    'data' => $result,
-                    'message' => 'PDF parsed successfully',
-                ]);
+                return response()->json($result);
             } catch (\Exception $e) {
                 return response()->json([
                     'success' => false,
@@ -406,6 +403,48 @@ class TransactionController extends Controller
             ])
             ->landscape()
             ->download("transaction-{$payment->id}.pdf");
+    }
+
+    /**
+     * Show a single payment details.
+     */
+    public function show(Payment $payment, Request $request)
+    {
+        $payment->load(['client', 'staff.user', 'collectionSession', 'invoice']);
+
+        if ($request->wantsJson()) {
+            return response()->json(['payment' => $payment]);
+        }
+
+        return Inertia::render('Transactions/Index', [
+            'payments'   => $this->index($request)->toResponse($request)->getData(true)['props']['payments'] ?? [],
+            'selectedTx' => $payment,
+        ]);
+    }
+
+    public function update(Request $request, Payment $payment)
+    {
+        $validated = $request->validate([
+            'payer_name'     => 'nullable|string|max:255',
+            'amount'         => 'required|numeric|min:0',
+            'payment_method' => 'required|in:cash,mobile_money,bank',
+            'status'         => 'required|in:paid,pending,refunded',
+            'paid_at'        => 'nullable|date',
+            'notes'          => 'nullable|string',
+        ]);
+
+        $old = $payment->only(array_keys($validated));
+        $payment->update($validated);
+        AuditLog::log('payment.update', 'Payment', $payment->id, $validated, $old);
+
+        return back()->with('success', 'Transaction updated.');
+    }
+
+    public function destroy(Payment $payment)
+    {
+        AuditLog::log('payment.delete', 'Payment', $payment->id, null, $payment->toArray());
+        $payment->delete();
+        return back()->with('success', 'Transaction deleted.');
     }
 
     /**

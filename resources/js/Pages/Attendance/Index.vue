@@ -438,10 +438,6 @@ const formatDate = (date) => {
   })
 }
 
-const approveLeave = (id) => {
-  window.location.href = `/attendance/leave/${id}/approve`
-}
-
 const attendanceForm = useForm({
   staff_id: '',
   work_date: new Date().toISOString().slice(0, 10),

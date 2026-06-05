@@ -18,10 +18,10 @@ class FinanceController extends Controller
     {
         $month = $request->input('month', now()->month);
         $year = $request->input('year', now()->year);
+        $monthYear = (int)($year . str_pad($month, 2, '0', STR_PAD_LEFT));
 
         $invoices = Invoice::with('client')
-            ->whereMonth('billing_month', $month)
-            ->whereYear('billing_year', $year)
+            ->where('billing_month', $monthYear)
             ->orderBy('due_date')
             ->get();
 

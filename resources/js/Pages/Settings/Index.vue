@@ -93,7 +93,15 @@
       <div class="settings-section" v-show="activeTab === 'notifications'">
         <div class="section-header">
           <h3>Notification Settings</h3>
-          <button class="action-btn action-btn--primary">Save Changes</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="action-btn" @click="testEmail">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="14" height="14">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/>
+              </svg>
+              Test Email
+            </button>
+            <button class="action-btn action-btn--primary">Save Changes</button>
+          </div>
         </div>
         
         <div class="settings-form">
@@ -203,6 +211,20 @@
         <div class="danger-content">
           <div class="danger-item">
             <div class="danger-info">
+              <div class="danger-label">Clear Cache</div>
+              <div class="danger-description">Clear application cache to refresh settings</div>
+            </div>
+            <button class="danger-btn danger-btn--warning" @click="clearCache">Clear Cache</button>
+          </div>
+          <div class="danger-item">
+            <div class="danger-info">
+              <div class="danger-label">Run Backup</div>
+              <div class="danger-description">Create a full system backup</div>
+            </div>
+            <button class="danger-btn danger-btn--warning" @click="runBackup">Run Backup</button>
+          </div>
+          <div class="danger-item">
+            <div class="danger-info">
               <div class="danger-label">Export All Data</div>
               <div class="danger-description">Download all system data as JSON</div>
             </div>
@@ -223,6 +245,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { router } from '@inertiajs/vue3'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
@@ -272,6 +295,40 @@ const saveSettings = (section) => {
       // Handle success
     }
   })
+}
+
+const testEmail = () => {
+  const email = prompt('Enter email address to send test email:', form.general.email)
+  if (email) {
+    router.post('/settings/test-email', { test_email: email }, {
+      onSuccess: () => {
+        alert('Test email sent successfully!')
+      },
+      onError: (errors) => {
+        alert('Failed to send test email.')
+      }
+    })
+  }
+}
+
+const clearCache = () => {
+  if (confirm('This will clear all application cache. Continue?')) {
+    router.post('/settings/clear-cache', {}, {
+      onSuccess: () => {
+        alert('Cache cleared successfully!')
+      }
+    })
+  }
+}
+
+const runBackup = () => {
+  if (confirm('This will initiate a full system backup. This may take a few minutes. Continue?')) {
+    router.post('/settings/backup', {}, {
+      onSuccess: () => {
+        alert('Backup initiated successfully!')
+      }
+    })
+  }
 }
 </script>
 

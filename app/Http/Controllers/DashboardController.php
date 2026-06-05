@@ -47,14 +47,13 @@ class DashboardController extends Controller
             ->where('billing_year', now()->year)
             ->sum('penalty_amount');
 
+        $currentMonthYear = (int)(now()->format('Ym'));
         $clientsUnpaid = Invoice::whereIn('status', ['unpaid', 'overdue', 'penalized'])
-            ->where('billing_month', now()->month)
-            ->where('billing_year', now()->year)
+            ->where('billing_month', $currentMonthYear)
             ->distinct('client_id')
             ->count('client_id');
 
-        $totalInvoiced = Invoice::where('billing_month', now()->month)
-            ->where('billing_year', now()->year)
+        $totalInvoiced = Invoice::where('billing_month', $currentMonthYear)
             ->sum('amount_due');
 
         $collectionRate = $totalInvoiced > 0

@@ -23,6 +23,7 @@ use App\Http\Controllers\ZoneController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\CollectionSessionController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Auth\LoginController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -33,15 +34,16 @@ use Inertia\Inertia;
 */
 
 // Guest routes
-Route::get('/login', function () {
-    return Inertia::render('Auth/Login');
-})->name('login');
+Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
+Route::post('/login', [LoginController::class, 'login'])->name('login.post');
+Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
 // Authenticated routes
 Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/dashboard/export', [DashboardController::class, 'exportDashboard'])->name('dashboard.export');
     Route::get('/dashboard/alerts', [DashboardController::class, 'getAlerts'])->name('dashboard.alerts');
     Route::get('/dashboard/flag-non-payers', [DashboardController::class, 'flagNonPayers'])->name('dashboard.flag-non-payers');
@@ -63,18 +65,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [TransactionController::class, 'index'])->name('index');
         Route::get('/create', [TransactionController::class, 'create'])->name('create');
         Route::post('/', [TransactionController::class, 'store'])->name('store');
-        Route::get('/{payment}', [TransactionController::class, 'show'])->name('show');
-        Route::post('/{payment}/refund', [TransactionController::class, 'refund'])->name('refund');
-        Route::post('/{payment}/email-receipt', [TransactionController::class, 'sendReceiptEmail'])->name('email-receipt');
         Route::get('/import', [TransactionController::class, 'importPage'])->name('import');
         Route::post('/import/preview', [TransactionController::class, 'preview'])->name('import.preview');
         Route::post('/import/confirm', [TransactionController::class, 'confirmImport'])->name('import.confirm');
+        Route::post('/preview', [TransactionController::class, 'preview'])->name('preview-alt');
+        Route::post('/confirm-import', [TransactionController::class, 'confirmImport'])->name('confirm-import-alt');
         Route::get('/export', [TransactionController::class, 'export'])->name('export');
         Route::get('/export/pdf', [TransactionController::class, 'exportPdf'])->name('export.pdf');
         Route::get('/export/imported-pdf', [TransactionController::class, 'exportImportedPdf'])->name('export.imported-pdf');
-        Route::get('/{payment}/pdf', [TransactionController::class, 'downloadPdf'])->name('pdf');
         Route::post('/reconcile-batch', [TransactionController::class, 'reconcileWithBank'])->name('reconcile-batch');
         Route::post('/export-batch', [TransactionController::class, 'exportBatch'])->name('export-batch');
+        Route::get('/{payment}', [TransactionController::class, 'show'])->name('show');
+        Route::patch('/{payment}', [TransactionController::class, 'update'])->name('update');
+        Route::delete('/{payment}', [TransactionController::class, 'destroy'])->name('destroy');
+        Route::post('/{payment}/refund', [TransactionController::class, 'refund'])->name('refund');
+        Route::post('/{payment}/send-receipt', [TransactionController::class, 'sendReceiptEmail'])->name('send-receipt');
+        Route::post('/{payment}/email-receipt', [TransactionController::class, 'sendReceiptEmail'])->name('email-receipt');
+        Route::get('/{payment}/pdf', [TransactionController::class, 'downloadPdf'])->name('pdf');
     });
 
     // Reports
@@ -107,6 +114,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/{salaryPayment}/mark-paid', [PayrollController::class, 'markAsPaid'])->name('mark-paid');
         Route::get('/export', [PayrollController::class, 'export'])->name('export');
         Route::post('/process-all', [PayrollController::class, 'processPayments'])->name('process-all');
+        Route::post('/process', [PayrollController::class, 'processPayments'])->name('process');
         Route::get('/{salaryPayment}/payslip', [PayrollController::class, 'generatePayslip'])->name('payslip');
         Route::post('/{salaryPayment}/email-payslip', [PayrollController::class, 'emailPayslip'])->name('email-payslip');
         Route::get('/export-bank-file', [PayrollController::class, 'exportBankFile'])->name('export-bank-file');
@@ -115,24 +123,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Staff Management
+    Route::prefix('staff')->name('staff.')->group(function () {
+        Route::get('/export', [StaffController::class, 'export'])->name('export');
+    });
     Route::resource('staff', StaffController::class)->except(['create', 'edit']);
+    Route::patch('/staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
+    Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
     Route::prefix('staff')->name('staff.')->group(function () {
         Route::post('/{staff}/documents', [StaffController::class, 'uploadDocument'])->name('upload-document');
         Route::post('/{staff}/emergency-contact', [StaffController::class, 'addEmergencyContact'])->name('add-emergency-contact');
         Route::post('/{staff}/rate', [StaffController::class, 'ratePerformance'])->name('rate');
         Route::post('/bulk-import', [StaffController::class, 'bulkImport'])->name('bulk-import');
         Route::patch('/{staff}/archive', [StaffController::class, 'archive'])->name('archive');
-        Route::patch('/archive/{id}/restore', [StaffController::class, 'restore'])->name('restore');
-        Route::get('/export', [StaffController::class, 'export'])->name('export');
+        Route::patch('/{id}/restore', [StaffController::class, 'restore'])->name('restore');
+        Route::get('/{staff}/profile', [StaffController::class, 'profile'])->name('profile');
     });
 
     // Expenses
+    Route::prefix('expenses')->name('expenses.')->group(function () {
+        Route::get('/export', [ExpenseController::class, 'export'])->name('export');
+        Route::get('/analytics', [ExpenseController::class, 'analytics'])->name('analytics');
+        Route::post('/categories', [ExpenseController::class, 'storeCategory'])->name('categories.store');
+    });
     Route::resource('expenses', ExpenseController::class)->except(['create', 'edit']);
     Route::prefix('expenses')->name('expenses.')->group(function () {
         Route::patch('/{expense}/approve', [ExpenseController::class, 'approve'])->name('approve');
         Route::patch('/{expense}/reject', [ExpenseController::class, 'reject'])->name('reject');
-        Route::get('/export', [ExpenseController::class, 'export'])->name('export');
-        Route::get('/analytics', [ExpenseController::class, 'analytics'])->name('analytics');
     });
 
     // Banking & Deposits
@@ -154,7 +170,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [AuditController::class, 'index'])->name('index');
         Route::get('/{auditLog}', [AuditController::class, 'show'])->name('show');
         Route::post('/{auditLog}/restore', [AuditController::class, 'restore'])->name('restore');
-        Route::delete('/cleanup', [AuditController::class, 'cleanup'])->name('cleanup');
+        Route::post('/cleanup', [AuditController::class, 'cleanup'])->name('cleanup');
         Route::get('/export', [AuditController::class, 'export'])->name('export');
     });
 
@@ -177,12 +193,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Vehicles
+    Route::prefix('vehicles')->name('vehicles.')->group(function () {
+        Route::get('/export', [VehicleController::class, 'export'])->name('export');
+    });
     Route::resource('vehicles', VehicleController::class);
     Route::prefix('vehicles')->name('vehicles.')->group(function () {
         Route::post('/{vehicle}/maintenance', [VehicleController::class, 'scheduleMaintenance'])->name('schedule-maintenance');
         Route::patch('/maintenance/{maintenance}/complete', [VehicleController::class, 'completeMaintenance'])->name('complete-maintenance');
         Route::post('/{vehicle}/fuel-log', [VehicleController::class, 'addFuelLog'])->name('add-fuel-log');
-        Route::get('/export', [VehicleController::class, 'export'])->name('export');
     });
 
     // Analytics
@@ -220,6 +238,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('clients')->name('clients.')->group(function () {
         Route::post('/{client}/contacts', [ClientController::class, 'addContact'])->name('add-contact');
         Route::get('/export', [ClientController::class, 'export'])->name('export');
+        Route::get('/{client}/profile', [ClientController::class, 'profile'])->name('profile');
     });
 
     // Finance (includes invoices, P&L, budget)
@@ -235,6 +254,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Invoices
     Route::resource('invoices', InvoiceController::class);
+    Route::prefix('invoices')->name('invoices.')->group(function () {
+        Route::post('/generate', [InvoiceController::class, 'generate'])->name('generate');
+        Route::post('/apply-penalties', [InvoiceController::class, 'applyPenalties'])->name('apply-penalties');
+    });
 
     // Collection Sessions
     Route::resource('collection-sessions', CollectionSessionController::class);
@@ -247,7 +270,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // User Profile
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
