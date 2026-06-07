@@ -5,6 +5,7 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BankingController;
+use App\Http\Controllers\BrowserLogController;
 use App\Http\Controllers\BulkImportController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CollectionSessionController;
@@ -33,6 +34,9 @@ use Inertia\Inertia;
 | Web Routes
 |--------------------------------------------------------------------------
 */
+
+// Browser log ingestion (used by client-side logger / Laravel Boost)
+Route::post('/_boost/browser-logs', [BrowserLogController::class, 'store'])->name('boost.browser-logs');
 
 // Guest routes
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
@@ -169,10 +173,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Audit Logs
     Route::prefix('audit')->name('audit.')->group(function () {
         Route::get('/', [AuditController::class, 'index'])->name('index');
-        Route::get('/{auditLog}', [AuditController::class, 'show'])->name('show');
-        Route::post('/{auditLog}/restore', [AuditController::class, 'restore'])->name('restore');
-        Route::post('/cleanup', [AuditController::class, 'cleanup'])->name('cleanup');
         Route::get('/export', [AuditController::class, 'export'])->name('export');
+        Route::post('/cleanup', [AuditController::class, 'cleanup'])->name('cleanup');
+        Route::post('/{auditLog}/restore', [AuditController::class, 'restore'])->name('restore');
+        Route::get('/{auditLog}', [AuditController::class, 'show'])->whereNumber('auditLog')->name('show');
     });
 
     // User Management

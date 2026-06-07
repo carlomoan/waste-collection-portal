@@ -9,8 +9,10 @@ class LeaveRequest extends Model
 {
     protected $fillable = [
         'staff_id',
+        'leave_type',
         'start_date',
         'end_date',
+        'days',
         'reason',
         'status',
     ];
@@ -18,6 +20,7 @@ class LeaveRequest extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'days' => 'integer',
     ];
 
     public function staff(): BelongsTo
