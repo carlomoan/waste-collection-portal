@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Staff;
 use App\Models\AttendanceRecord;
-use App\Models\LeaveRequest;
 use App\Models\AuditLog;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
+use App\Models\LeaveRequest;
+use App\Models\Staff;
 use App\Notifications\LeaveStatusChanged;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Validator;
+use Inertia\Inertia;
 
 class AttendanceController extends Controller
 {
@@ -27,7 +27,7 @@ class AttendanceController extends Controller
                 ->whereMonth('start_date', $month)
                 ->whereYear('start_date', $year)
                 ->get()
-                ->map(fn($lr) => [
+                ->map(fn ($lr) => [
                     'id' => $lr->id,
                     'staff_name' => $lr->staff->user->name ?? 'Unknown',
                     'leave_type' => $lr->leave_type,
@@ -43,7 +43,7 @@ class AttendanceController extends Controller
                     ->where('role', 'collector')
                     ->orderBy('name')
                     ->get()
-                    ->map(fn($s) => [
+                    ->map(fn ($s) => [
                         'id' => $s->id,
                         'name' => $s->user?->name,
                         'phone' => $s->phone,
@@ -52,7 +52,7 @@ class AttendanceController extends Controller
                 'todayAttendance' => AttendanceRecord::with('staff.user')
                     ->whereDate('work_date', today())
                     ->get()
-                    ->map(fn($r) => [
+                    ->map(fn ($r) => [
                         'id' => $r->id,
                         'staff_id' => $r->staff_id,
                         'staff_name' => $r->staff->user?->name,
@@ -67,7 +67,23 @@ class AttendanceController extends Controller
                 'summary' => $this->getMonthlySummary($month, $year),
             ]);
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to load attendance: '.$e->getMessage());
+            // Render the page with safe defaults rather than redirecting back,
+            // which can cause a redirect loop when the referrer is this page.
+            return Inertia::render('Attendance/Index', [
+                'staff' => [],
+                'todayAttendance' => [],
+                'pendingLeaveRequests' => [],
+                'month' => (int) $request->input('month', now()->month),
+                'year' => (int) $request->input('year', now()->year),
+                'summary' => [
+                    'total_present' => 0,
+                    'total_absent' => 0,
+                    'total_half_days' => 0,
+                    'total_leave' => 0,
+                    'total_overtime' => 0,
+                ],
+                'error' => 'Failed to load attendance: '.$e->getMessage(),
+            ]);
         }
     }
 
@@ -124,9 +140,11 @@ class AttendanceController extends Controller
             AuditLog::log('attendance.create', 'Attendance', $attendance->id, ['data' => $request->all()]);
 
             DB::commit();
+
             return back()->with('success', 'Attendance recorded.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return back()->with('error', 'Failed: '.$e->getMessage());
         }
     }
@@ -153,11 +171,11 @@ class AttendanceController extends Controller
                 ['status' => 'present']
             );
 
-            if ($request->action === 'clock_in' && !$record->clock_in) {
+            if ($request->action === 'clock_in' && ! $record->clock_in) {
                 $record->clock_in = $now;
                 $record->save();
                 $count++;
-            } elseif ($request->action === 'clock_out' && !$record->clock_out) {
+            } elseif ($request->action === 'clock_out' && ! $record->clock_out) {
                 $record->clock_out = $now;
                 // Auto-calc overtime if clock_out > 17:00
                 if ($record->clock_in && strtotime($now) > strtotime('17:00:00')) {
@@ -182,14 +200,14 @@ class AttendanceController extends Controller
             ->get();
 
         // Calculate late arrivals (clock_in > 08:30)
-        $lateCount = $attendance->filter(fn($a) => $a->clock_in && strtotime($a->clock_in) > strtotime('08:30:00'))->count();
+        $lateCount = $attendance->filter(fn ($a) => $a->clock_in && strtotime($a->clock_in) > strtotime('08:30:00'))->count();
 
         $data = [
             'month' => $month,
             'year' => $year,
             'summary' => $this->getMonthlySummary($month, $year),
             'late_arrivals' => $lateCount,
-            'details' => $attendance->map(fn($a) => [
+            'details' => $attendance->map(fn ($a) => [
                 'staff' => $a->staff->user?->name,
                 'date' => $a->work_date->format('Y-m-d'),
                 'status' => $a->status,
@@ -261,9 +279,11 @@ class AttendanceController extends Controller
 
             AuditLog::log('leave.approve', 'LeaveRequest', $id);
             DB::commit();
+
             return back()->with('success', 'Leave approved.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return back()->with('error', $e->getMessage());
         }
     }
@@ -278,6 +298,7 @@ class AttendanceController extends Controller
         }
 
         AuditLog::log('leave.reject', 'LeaveRequest', $id);
+
         return back()->with('success', 'Leave rejected.');
     }
 
@@ -292,6 +313,7 @@ class AttendanceController extends Controller
             }
             fclose($file);
         };
+
         return response()->stream($callback, 200, $headers);
     }
 }

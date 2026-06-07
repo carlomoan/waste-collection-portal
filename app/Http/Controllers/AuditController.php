@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Spatie\QueryBuilder\QueryBuilder;
 use Spatie\QueryBuilder\AllowedFilter;
+use Spatie\QueryBuilder\QueryBuilder;
 
 class AuditController extends Controller
 {
@@ -45,8 +45,12 @@ class AuditController extends Controller
     {
         $auditLog->load('user');
         // Optionally decode old/new values
-        if ($auditLog->old_values) $auditLog->old_values = json_decode($auditLog->old_values, true);
-        if ($auditLog->new_values) $auditLog->new_values = json_decode($auditLog->new_values, true);
+        if ($auditLog->old_values) {
+            $auditLog->old_values = json_decode($auditLog->old_values, true);
+        }
+        if ($auditLog->new_values) {
+            $auditLog->new_values = json_decode($auditLog->new_values, true);
+        }
 
         return Inertia::render('Audit/Show', ['log' => $auditLog]);
     }
@@ -54,12 +58,12 @@ class AuditController extends Controller
     public function restore(AuditLog $auditLog)
     {
         // Only for 'updated' or 'deleted' actions
-        if ($auditLog->action !== 'deleted' || !$auditLog->old_values) {
+        if ($auditLog->action !== 'deleted' || ! $auditLog->old_values) {
             return back()->with('error', 'Cannot restore this log entry.');
         }
 
         $modelClass = $auditLog->module;
-        if (!class_exists($modelClass)) {
+        if (! class_exists($modelClass)) {
             return back()->with('error', 'Model class not found.');
         }
 
@@ -70,6 +74,7 @@ class AuditController extends Controller
             $model->restore();
             $model->update($oldData);
             AuditLog::log('restore', $modelClass, $auditLog->record_id, ['restored_from_log_id' => $auditLog->id]);
+
             return back()->with('success', 'Record restored successfully.');
         }
 
@@ -87,11 +92,14 @@ class AuditController extends Controller
     public function export(Request $request)
     {
         $logs = AuditLog::with('user')->latest('timestamp')->limit(5000)->get();
+
         return response()->streamDownload(function () use ($logs) {
             $f = fopen('php://output', 'w');
-            fputcsv($f, ['Timestamp','User','Action','Module','Record ID','Description','IP']);
-            foreach ($logs as $l) fputcsv($f, [$l->timestamp,$l->user?->name,$l->action,$l->module,$l->record_id,$l->description,$l->ip_address]);
+            fputcsv($f, ['Timestamp', 'User', 'Action', 'Module', 'Record ID', 'Description', 'IP']);
+            foreach ($logs as $l) {
+                fputcsv($f, [$l->timestamp, $l->user?->name, $l->action, $l->module, $l->record_id, $l->description, $l->ip_address]);
+            }
             fclose($f);
-        }, 'audit-logs.csv');
+        }, 'audit-logs.csv', ['Content-Type' => 'text/csv']);
     }
 }
