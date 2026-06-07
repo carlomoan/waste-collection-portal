@@ -200,9 +200,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('bulk-import')->name('bulk-import.')->group(function () {
         Route::get('/', [BulkImportController::class, 'index'])->name('index');
         Route::post('/', [BulkImportController::class, 'store'])->name('store');
-        Route::get('/{bulkImport}', [BulkImportController::class, 'show'])->name('show');
+        Route::post('/preview', [BulkImportController::class, 'preview'])->name('preview');
         Route::get('/template/{entityType}', [BulkImportController::class, 'downloadTemplate'])->name('template');
-        Route::post('/{bulkImport}/rollback', [BulkImportController::class, 'rollback'])->name('rollback');
+        Route::post('/{bulkImport}/rollback', [BulkImportController::class, 'rollback'])->whereNumber('bulkImport')->name('rollback');
     });
 
     // Vehicles
