@@ -10,22 +10,22 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total Imports</div>
-          <div class="summary-value">24</div>
+          <div class="summary-value">{{ stats.total_imports }}</div>
           <div class="summary-change summary-change--positive">This month</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Records Imported</div>
-          <div class="summary-value">3,456</div>
+          <div class="summary-value">{{ formatNumber(stats.records_imported) }}</div>
           <div class="summary-change summary-change--positive">This month</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Success Rate</div>
-          <div class="summary-value">98.5%</div>
-          <div class="summary-change summary-change--neutral">Last 30 days</div>
+          <div class="summary-value">{{ stats.success_rate }}%</div>
+          <div class="summary-change summary-change--neutral">All time</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Last Import</div>
-          <div class="summary-value">156</div>
+          <div class="summary-value">{{ formatNumber(stats.last_import) }}</div>
           <div class="summary-change summary-change--neutral">Records</div>
         </div>
       </div>
@@ -50,7 +50,6 @@
                 <option value="clients">Clients</option>
                 <option value="staff">Staff</option>
                 <option value="payments">Payments</option>
-                <option value="collection_sessions">Collection Sessions</option>
               </select>
             </div>
             <div class="form-group">
@@ -82,6 +81,10 @@
             </div>
           </div>
           <div class="form-actions">
+            <button type="button" class="action-btn" :disabled="!selectedFile || isPreviewing" @click="previewImport">
+              <span v-if="isPreviewing">Validating...</span>
+              <span v-else>Preview</span>
+            </button>
             <button type="submit" class="action-btn action-btn--primary" :disabled="!selectedFile || isSubmitting">
               <svg v-if="!isSubmitting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -91,6 +94,51 @@
             </button>
           </div>
         </form>
+      </div>
+
+      <!-- Preview Modal -->
+      <div v-if="showPreview" class="modal-overlay" @click.self="closePreview">
+        <div class="modal preview-modal">
+          <div class="modal-header">
+            <h3>Import Preview — {{ formatEntityType(entityType) }}</h3>
+            <button class="modal-close" @click="closePreview">✕</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="previewError" class="preview-error">{{ previewError }}</div>
+            <template v-else>
+              <div class="preview-summary">
+                <span class="preview-badge preview-badge--ok">{{ previewData.valid }} valid</span>
+                <span class="preview-badge preview-badge--bad">{{ previewData.invalid }} invalid</span>
+                <span class="preview-note">Showing first {{ previewData.rows.length }} row(s)</span>
+              </div>
+              <div class="preview-table-wrap" v-if="previewData.columns.length">
+                <table class="imports-table preview-table">
+                  <thead>
+                    <tr><th v-for="col in previewData.columns" :key="col">{{ col }}</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, i) in previewData.rows" :key="i">
+                      <td v-for="col in previewData.columns" :key="col">{{ row[col] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-if="previewData.errors.length" class="preview-errors">
+                <h4>Validation issues</h4>
+                <ul>
+                  <li v-for="(err, i) in previewData.errors" :key="i">Row {{ err.row }}: {{ err.message }}</li>
+                </ul>
+              </div>
+            </template>
+          </div>
+          <div class="modal-footer">
+            <button class="action-btn" @click="closePreview">Cancel</button>
+            <button class="action-btn action-btn--primary" :disabled="!previewData || previewData.valid === 0 || isSubmitting" @click="confirmImport">
+              <span v-if="isSubmitting">Importing...</span>
+              <span v-else>Confirm Import ({{ previewData ? previewData.valid : 0 }})</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Recent Imports -->
@@ -124,7 +172,7 @@
               <td>{{ bulkImport.records_imported }}</td>
               <td><span class="status-badge" :class="getStatusClass(bulkImport.status)">{{ bulkImport.status }}</span></td>
               <td>{{ formatDate(bulkImport.imported_at) }}</td>
-              <td>{{ bulkImport.imported_by }}</td>
+              <td>{{ bulkImport.imported_by?.name || bulkImport.imported_by_name || '—' }}</td>
               <td class="td-actions">
                 <button v-if="bulkImport.status === 'completed'" class="table-action table-action--danger" @click="rollbackImport(bulkImport)">Rollback</button>
               </td>
@@ -190,7 +238,11 @@ const props = defineProps({
   },
   entityTypes: {
     type: Array,
-    default: () => ['clients', 'staff', 'payments', 'collection_sessions']
+    default: () => ['clients', 'staff', 'payments']
+  },
+  stats: {
+    type: Object,
+    default: () => ({ total_imports: 0, records_imported: 0, success_rate: 0, last_import: 0 })
   }
 })
 
@@ -199,6 +251,10 @@ const importDate = ref(new Date().toISOString().split('T')[0])
 const selectedFile = ref(null)
 const isDragging = ref(false)
 const isSubmitting = ref(false)
+const isPreviewing = ref(false)
+const showPreview = ref(false)
+const previewData = ref(null)
+const previewError = ref(null)
 const fileInput = ref(null)
 
 const handleFileChange = (event) => {
@@ -223,35 +279,86 @@ const clearFile = () => {
   }
 }
 
-const submitImport = () => {
+const readXsrfToken = () => {
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
+const previewImport = async () => {
   if (!selectedFile.value) return
-  
-  isSubmitting.value = true
-  
+
+  isPreviewing.value = true
+  previewError.value = null
+  previewData.value = null
+
   const formData = new FormData()
   formData.append('file', selectedFile.value)
   formData.append('entity_type', entityType.value)
-  formData.append('import_date', importDate.value)
-  
+
+  try {
+    const response = await fetch(route('bulk-import.preview'), {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-XSRF-TOKEN': readXsrfToken(),
+      },
+      body: formData,
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      previewError.value = data.message || 'Could not read file.'
+    } else {
+      previewData.value = data
+    }
+  } catch (e) {
+    previewError.value = 'Could not reach the server. Please try again.'
+  } finally {
+    isPreviewing.value = false
+    showPreview.value = true
+  }
+}
+
+const closePreview = () => {
+  showPreview.value = false
+}
+
+const confirmImport = () => {
+  showPreview.value = false
+  submitImport()
+}
+
+const submitImport = () => {
+  if (!selectedFile.value) return
+
+  isSubmitting.value = true
+
   useForm({
     file: selectedFile.value,
+    entity_type: entityType.value,
     import_date: importDate.value,
   }).post(route('bulk-import.store'), {
+    forceFormData: true,
     onSuccess: () => {
-      isSubmitting.value = false
       selectedFile.value = null
+      previewData.value = null
       if (fileInput.value) {
         fileInput.value.value = ''
       }
+      router.reload({ only: ['recentImports', 'stats', 'imports'] })
     },
-    onError: () => {
+    onFinish: () => {
       isSubmitting.value = false
     },
   })
 }
 
 const downloadTemplate = () => {
-  window.location.href = `/bulk-import/download-template/${entityType.value}`
+  window.location.href = route('bulk-import.template', { entityType: entityType.value })
+}
+
+const formatNumber = (value) => {
+  return Number(value || 0).toLocaleString('en-US')
 }
 
 const formatDate = (dateString) => {
@@ -286,7 +393,7 @@ const formatEntityType = (type) => {
 
 const rollbackImport = (bulkImport) => {
   if (confirm(`Rollback this import? This will delete ${bulkImport.records_imported} records. This action cannot be undone.`)) {
-    router.post(`/bulk-import/rollback/${bulkImport.id}`, {}, {
+    router.post(route('bulk-import.rollback', { bulkImport: bulkImport.id }), {}, {
       onSuccess: () => {
         router.reload()
       }
@@ -541,6 +648,136 @@ const rollbackImport = (bulkImport) => {
 .form-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Preview modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.preview-modal {
+  background: white;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 860px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header,
+.modal-footer {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+}
+
+.modal-header {
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #1a2e24;
+}
+
+.modal-close {
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  color: #4a6357;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow: auto;
+}
+
+.modal-footer {
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.preview-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.preview-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.preview-badge--ok {
+  background: #e3f6ec;
+  color: #1f7a4d;
+}
+
+.preview-badge--bad {
+  background: #fbe6e6;
+  color: #b3261e;
+}
+
+.preview-note {
+  font-size: 12px;
+  color: #4a6357;
+}
+
+.preview-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+}
+
+.preview-table th,
+.preview-table td {
+  white-space: nowrap;
+}
+
+.preview-errors {
+  margin-top: 16px;
+}
+
+.preview-errors h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #b3261e;
+}
+
+.preview-errors ul {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.preview-errors li {
+  font-size: 12px;
+  color: #4a6357;
+  margin-bottom: 4px;
+}
+
+.preview-error {
+  color: #b3261e;
+  font-size: 14px;
 }
 
 .imports-table {
