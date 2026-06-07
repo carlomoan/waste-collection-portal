@@ -8,6 +8,7 @@ use App\Services\BulkImportProcessor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class BulkImportController extends Controller
@@ -53,12 +54,18 @@ class BulkImportController extends Controller
             'entity_type' => 'required|in:'.implode(',', self::ENTITY_TYPES),
         ]);
 
-        $path = $request->file('file')->getRealPath();
+        // Store to disk first so the file keeps its extension; PhpSpreadsheet
+        // detects the reader from the extension, which the raw temp upload path
+        // (e.g. /tmp/phpXXXX) lacks.
+        $path = $request->file('file')->store('bulk-imports/previews', 'local');
+        $absolutePath = Storage::disk('local')->path($path);
 
         try {
-            $preview = $processor->preview($path, $validated['entity_type']);
+            $preview = $processor->preview($absolutePath, $validated['entity_type']);
         } catch (\Throwable $e) {
             return response()->json(['message' => 'Could not read file: '.$e->getMessage()], 422);
+        } finally {
+            Storage::disk('local')->delete($path);
         }
 
         return response()->json($preview);

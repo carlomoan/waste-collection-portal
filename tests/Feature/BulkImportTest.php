@@ -27,9 +27,15 @@ class BulkImportTest extends TestCase
         return $user;
     }
 
+    /**
+     * Build an UploadedFile that mirrors a real browser upload: the original
+     * client name carries the extension (e.g. clients.csv) but the temp file
+     * on disk has none (PHP stores uploads as /tmp/phpXXXX). Reader detection
+     * must therefore rely on the stored/original name, not getRealPath().
+     */
     private function csvFile(string $name, string $contents): UploadedFile
     {
-        $path = tempnam(sys_get_temp_dir(), 'imp').'.csv';
+        $path = tempnam(sys_get_temp_dir(), 'imp');
         file_put_contents($path, $contents);
 
         return new UploadedFile($path, $name, 'text/csv', null, true);
@@ -104,6 +110,7 @@ class BulkImportTest extends TestCase
 
     public function test_preview_returns_validation_summary_without_persisting(): void
     {
+        Storage::fake('local');
         $this->actingUser();
 
         $file = $this->csvFile('clients.csv', "name,phone,zone_id,client_type_id\nAlice,255700000001,1,1\nNoPhone,,1,1\n");
