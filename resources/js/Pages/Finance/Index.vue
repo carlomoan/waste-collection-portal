@@ -42,353 +42,209 @@
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Net Profit</div>
-          <div class="kpi-value" :class="profitLoss.net_profit >= 0 ? 'positive' : 'negative'">{{ formatCurrency(profitLoss.net_profit) }}</div>
-          <div class="kpi-sub">{{ profitLoss.profit_margin }}% margin</div>
+          <div class="kpi-value" :class="(profitLoss.net_profit || 0) >= 0 ? 'positive' : 'negative'">{{ formatCurrency(profitLoss.net_profit) }}</div>
+          <div class="kpi-sub">{{ profitLoss.profit_margin || 0 }}% margin</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Cash Flow</div>
-          <div class="kpi-value" :class="cashFlow.net_cash_flow >= 0 ? 'positive' : 'negative'">{{ formatCurrency(cashFlow.net_cash_flow) }}</div>
-          <div class="kpi-sub">Net cash position</div>
+          <div class="kpi-value" :class="(cashFlow.net_cash_flow || 0) >= 0 ? 'positive' : 'negative'">{{ formatCurrency(cashFlow.net_cash_flow) }}</div>
+          <div class="kpi-sub">Net cash movement</div>
         </div>
       </div>
 
-      <!-- Budget vs Actual -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Budget vs Actual</h3>
-        </div>
-        <div class="budget-grid">
-          <div class="budget-item">
-            <div class="budget-label">Revenue Target</div>
-            <div class="budget-value">{{ formatCurrency(budgetVsActual.revenue_target) }}</div>
-            <div class="budget-actual">{{ formatCurrency(budgetVsActual.revenue_actual) }}</div>
-            <div class="budget-variance" :class="budgetVsActual.revenue_variance >= 0 ? 'positive' : 'negative'">
-              {{ budgetVsActual.revenue_variance >= 0 ? '+' : '' }}{{ formatCurrency(budgetVsActual.revenue_variance) }}
-            </div>
+      <!-- Charts -->
+      <div class="charts-section">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Revenue Trend</h3>
+            <div class="chart-legend"><span class="legend-item"><span class="legend-color" style="background:#10b981"></span> Revenue</span></div>
           </div>
-          <div class="budget-item">
-            <div class="budget-label">Expense Budget</div>
-            <div class="budget-value">{{ formatCurrency(budgetVsActual.expense_budget) }}</div>
-            <div class="budget-actual">{{ formatCurrency(budgetVsActual.expense_actual) }}</div>
-            <div class="budget-variance" :class="budgetVsActual.expense_variance <= 0 ? 'positive' : 'negative'">
-              {{ budgetVsActual.expense_variance <= 0 ? '+' : '' }}{{ formatCurrency(budgetVsActual.expense_variance) }}
-            </div>
+          <div class="chart-container">
+            <BarChart :data="revenueChartData" :options="revenueChartOptions" />
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Expense Breakdown</h3>
+            <div class="chart-legend"><span class="legend-item"><span class="legend-color" style="background:#ef4444"></span> Expenses</span></div>
+          </div>
+          <div class="chart-container">
+            <DoughnutChart :data="expenseChartData" :options="expenseChartOptions" />
           </div>
         </div>
       </div>
 
       <!-- Recent Transactions -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Recent Payments</h3>
+      <div class="transactions-section">
+        <div class="section-header">
+          <h3>Recent Transactions</h3>
+          <Link href="/transactions" class="view-all">View all →</Link>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Control #</th>
-              <th>Client</th>
-              <th>Amount</th>
-              <th>Method</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="payment in payments" :key="payment.id">
-              <td>{{ formatDate(payment.paid_at) }}</td>
-              <td>{{ payment.control_number }}</td>
-              <td>{{ payment.client?.name || 'Unknown' }}</td>
-              <td>{{ formatCurrency(payment.amount) }}</td>
-              <td>{{ payment.payment_method }}</td>
-            </tr>
-            <tr v-if="payments.length === 0">
-              <td colspan="5" style="text-align: center; color: #4a6357;">No payments found</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Recent Expenses -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Recent Expenses</h3>
+        <div class="transactions-table">
+          <div class="table-header">
+            <div class="col control-number">Control #</div>
+            <div class="col payer-name">Payer Name</div>
+            <div class="col amount">Amount</div>
+            <div class="col method">Method</div>
+            <div class="col date">Date</div>
+            <div class="col status">Status</div>
+          </div>
+          <div class="table-body">
+            <div v-for="transaction in recentTransactions" :key="transaction.id" class="table-row">
+              <div class="col control-number">{{ transaction.control_number }}</div>
+              <div class="col payer-name">{{ transaction.payerName }}</div>
+              <div class="col amount">{{ formatCurrency(transaction.amount) }}</div>
+              <div class="col method">{{ transaction.paymentMethod }}</div>
+              <div class="col date">{{ formatDate(transaction.paidAt) }}</div>
+              <div class="col status">
+                <span class="status-badge" :class="`status-badge--${transaction.status}`">{{ transaction.status }}</span>
+              </div>
+            </div>
+            <div v-if="!recentTransactions.length" class="empty-row">No transactions this month.</div>
+          </div>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Category</th>
-              <th>Description</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="expense in expenses" :key="expense.id">
-              <td>{{ formatDate(expense.expense_date) }}</td>
-              <td>{{ expense.category?.name || 'N/A' }}</td>
-              <td>{{ expense.description }}</td>
-              <td>{{ formatCurrency(expense.amount) }}</td>
-            </tr>
-            <tr v-if="expenses.length === 0">
-              <td colspan="4" style="text-align: center; color: #4a6357;">No expenses found</td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import BarChart from '@/Components/BarChart.vue'
+import DoughnutChart from '@/Components/DoughnutChart.vue'
 
 const props = defineProps({
-  invoices: { type: Array, default: () => [] },
-  payments: { type: Array, default: () => [] },
-  expenses: { type: Array, default: () => [] },
-  bankDeposits: { type: Array, default: () => [] },
-  monthlyStats: { type: Object, default: () => ({}) },
-  profitLoss: { type: Object, default: () => ({ revenue: 0, expenses: 0, net_profit: 0, profit_margin: 0 }) },
-  budgetVsActual: { type: Object, default: () => ({ revenue_target: 0, revenue_actual: 0, revenue_variance: 0, expense_budget: 0, expense_actual: 0, expense_variance: 0 }) },
-  cashFlow: { type: Object, default: () => ({ cash_in: 0, cash_out: 0, net_cash_flow: 0 }) },
-  selectedMonth: { type: Number, default: new Date().getMonth() + 1 },
-  selectedYear: { type: Number, default: new Date().getFullYear() },
+  profitLoss:    { type: Object, default: () => ({}) },
+  cashFlow:      { type: Object, default: () => ({}) },
+  selectedMonth: { type: [String, Number], default: new Date().getMonth() + 1 },
+  selectedYear:  { type: [String, Number], default: new Date().getFullYear() },
+  payments:      { type: Array, default: () => [] },
+  expenses:      { type: Array, default: () => [] },
 })
 
 const selectedMonth = ref(props.selectedMonth)
-const selectedYear = ref(props.selectedYear)
+const selectedYear  = ref(props.selectedYear)
 
-const months = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
-]
+const months = ref([
+  { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
+  { value: 4, label: 'April' }, { value: 5, label: 'May' }, { value: 6, label: 'June' },
+  { value: 7, label: 'July' }, { value: 8, label: 'August' }, { value: 9, label: 'September' },
+  { value: 10, label: 'October' }, { value: 11, label: 'November' }, { value: 12, label: 'December' },
+])
+const years = ref(Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i))
 
-const currentYear = new Date().getFullYear()
-const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1]
+const recentTransactions = computed(() =>
+  props.payments.slice(0, 10).map(p => ({
+    id: p.id,
+    control_number: p.control_number,
+    payerName: p.client?.name || p.payer_name || 'Unknown',
+    amount: p.amount,
+    paymentMethod: p.payment_method,
+    paidAt: p.paid_at,
+    status: p.status || 'paid',
+  }))
+)
+
+const revenueChartData = computed(() => {
+  const dailyRevenue = {}
+  props.payments.filter(p => p.status === 'paid').forEach(p => {
+    const day = new Date(p.paid_at).getDate()
+    dailyRevenue[day] = (dailyRevenue[day] || 0) + parseFloat(p.amount)
+  })
+  const labels = Object.keys(dailyRevenue).sort((a, b) => a - b)
+  return {
+    labels: labels.map(d => `Day ${d}`),
+    datasets: [{ label: 'Revenue', data: labels.map(d => dailyRevenue[d]), backgroundColor: 'rgba(16,185,129,0.5)', borderColor: '#10b981', borderWidth: 2 }],
+  }
+})
+
+const expenseChartData = computed(() => {
+  const categoryTotals = {}
+  props.expenses.forEach(e => {
+    const cat = e.category?.name || 'Uncategorized'
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + parseFloat(e.amount)
+  })
+  return {
+    labels: Object.keys(categoryTotals),
+    datasets: [{ data: Object.values(categoryTotals), backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#10b981'], borderWidth: 1 }],
+  }
+})
+
+const revenueChartOptions = ref({ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } })
+const expenseChartOptions = ref({ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } })
 
 const loadData = () => {
-  router.get('/finance', { month: selectedMonth.value, year: selectedYear.value }, { preserveState: false })
+  router.get('/finance', { month: selectedMonth.value, year: selectedYear.value }, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+  })
 }
 
 const exportReport = () => {
-  window.location.href = `/finance/export?month=${selectedMonth.value}&year=${selectedYear.value}&format=csv`
+  window.location.href = `/finance/export?month=${selectedMonth.value}&year=${selectedYear.value}`
 }
 
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('sw-TZ', {
-    style: 'currency',
-    currency: 'TZS',
-    minimumFractionDigits: 0,
-  }).format(value)
+const formatCurrency = (amount) => {
+  if (!amount) return 'TZS 0.00'
+  return 'TZS ' + amount.toLocaleString('en-TZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-const formatDate = (date) => {
-  return new Date(date).toLocaleDateString('en-TZ', { year: 'numeric', month: 'short', day: 'numeric' })
+const formatDate = (dateString) => {
+  if (!dateString) return ''
+  return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 </script>
 
 <style scoped>
-.finance-container {
-  padding: 20px;
-}
-
-.header {
-  margin-bottom: 24px;
-}
-
-.header h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1a2e24;
-  margin-bottom: 4px;
-}
-
-.header p {
-  color: #4a6357;
-  font-size: 14px;
-}
-
-.period-selector {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.period-select {
-  padding: 8px 12px;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 6px;
-  font-size: 13px;
-  color: #4a6357;
-  background: white;
-}
-
-.export-btn, .budget-btn {
-  padding: 8px 16px;
-  background: #4caf76;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  text-decoration: none;
-  transition: background 0.15s;
-}
-
-.export-btn:hover, .budget-btn:hover {
-  background: #2d7a50;
-}
-
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.kpi-card {
-  background: white;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 10px;
-  padding: 20px;
-}
-
-.kpi-label {
-  font-size: 12px;
-  color: #4a6357;
-  margin-bottom: 8px;
-}
-
-.kpi-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1a2e24;
-  margin-bottom: 4px;
-}
-
-.kpi-value.positive {
-  color: #2d7a50;
-}
-
-.kpi-value.negative {
-  color: #c0392b;
-}
-
-.kpi-sub {
-  font-size: 11px;
-  color: #7a9489;
-}
-
-.card {
-  background: white;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.card-header h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a2e24;
-}
-
-.budget-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-.budget-item {
-  padding: 16px;
-  background: #f8faf9;
-  border-radius: 8px;
-}
-
-.budget-label {
-  font-size: 12px;
-  color: #4a6357;
-  margin-bottom: 4px;
-}
-
-.budget-value {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a2e24;
-  margin-bottom: 4px;
-}
-
-.budget-actual {
-  font-size: 14px;
-  color: #4a6357;
-  margin-bottom: 4px;
-}
-
-.budget-variance {
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.budget-variance.positive {
-  color: #2d7a50;
-}
-
-.budget-variance.negative {
-  color: #c0392b;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th {
-  text-align: left;
-  padding: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #4a6357;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-}
-
-.data-table td {
-  padding: 12px;
-  font-size: 13px;
-  color: #1a2e24;
-  border-bottom: 1px solid rgba(0,0,0,0.04);
-}
-
-.data-table tr:last-child td {
-  border-bottom: none;
-}
-
-@media (max-width: 1024px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .budget-grid {
-    grid-template-columns: 1fr;
-  }
-}
+.finance-container { max-width: 1400px; margin: 0 auto; padding: 32px; }
+.header { margin-bottom: 32px; }
+.header h1 { font-size: 32px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
+.header p { font-size: 16px; color: #64748b; }
+.period-selector { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+.period-select { padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; font-size: 14px; color: #475569; cursor: pointer; }
+.period-select:focus { outline: none; border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.1); }
+.export-btn, .budget-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.2s; }
+.export-btn:hover, .budget-btn:hover { background: linear-gradient(135deg, #059669 0%, #047857 100%); transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 32px; }
+.kpi-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s; }
+.kpi-card:hover { box-shadow: 0 4px 6px rgba(0,0,0,0.1); transform: translateY(-2px); }
+.kpi-label { font-size: 14px; color: #64748b; margin-bottom: 8px; font-weight: 600; }
+.kpi-value { font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+.kpi-sub { font-size: 12px; color: #94a3b8; }
+.kpi-value.positive { color: #10b981; }
+.kpi-value.negative { color: #ef4444; }
+.charts-section { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 32px; }
+.chart-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.chart-header h3 { font-size: 18px; font-weight: 600; color: #1e293b; }
+.chart-legend { display: flex; gap: 16px; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
+.legend-color { width: 12px; height: 12px; border-radius: 2px; }
+.chart-container { height: 300px; position: relative; }
+.transactions-section { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.section-header h3 { font-size: 18px; font-weight: 600; color: #1e293b; }
+.view-all { font-size: 14px; color: #10b981; text-decoration: none; font-weight: 600; }
+.view-all:hover { text-decoration: underline; }
+.transactions-table { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.table-header { display: grid; grid-template-columns: 120px 1fr 100px 100px 120px 100px; gap: 16px; padding: 16px; background: #f8fafc; font-size: 14px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; }
+.table-body { max-height: 400px; overflow-y: auto; }
+.table-row { display: grid; grid-template-columns: 120px 1fr 100px 100px 120px 100px; gap: 16px; padding: 16px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s; }
+.table-row:hover { background: #f8fafc; }
+.col { display: flex; align-items: center; font-size: 14px; color: #1e293b; }
+.col.control-number { font-family: monospace; font-weight: 600; color: #10b981; }
+.col.payer-name { font-weight: 500; }
+.col.amount { font-weight: 600; }
+.col.status { justify-content: center; }
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+.status-badge--paid { background: #dcfce7; color: #166534; }
+.status-badge--pending { background: #fef3c7; color: #92400e; }
+.status-badge--failed { background: #fee2e2; color: #991b1b; }
+.status-badge--refunded { background: #e0f2fe; color: #0369a1; }
+.empty-row { text-align: center; padding: 24px; color: #94a3b8; }
+@media (max-width: 1024px) { .charts-section { grid-template-columns: 1fr; } .table-header, .table-row { grid-template-columns: 100px 1fr 80px 80px 100px 80px; gap: 12px; padding: 12px; } }
+@media (max-width: 768px) { .period-selector { flex-direction: column; } .period-select { width: 100%; } .export-btn, .budget-btn { justify-content: center; } .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); } .table-header, .table-row { grid-template-columns: 80px 1fr 70px 70px 80px 70px; gap: 8px; padding: 12px; font-size: 12px; } .col.control-number { font-size: 11px; } }
 </style>

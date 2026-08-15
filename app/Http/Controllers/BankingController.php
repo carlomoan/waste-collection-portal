@@ -21,7 +21,7 @@ class BankingController extends Controller
         });
 
         return Inertia::render('Banking/Index', [
-            'bankAccounts' => $accounts,
+            'bankAccounts' => $accounts->toArray(),
             'recentDeposits' => BankDeposit::with('bankAccount')->orderBy('deposit_date', 'desc')->limit(15)->get(),
             'cashPosition' => $this->getCashPosition(),
         ]);

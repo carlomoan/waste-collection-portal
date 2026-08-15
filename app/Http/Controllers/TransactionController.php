@@ -2,26 +2,31 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Payment;
-use App\Models\Client;
-use App\Models\BankDeposit;
+use App\Mail\PaymentReceipt;
 use App\Models\AuditLog;
+use App\Models\BankDeposit;
+use App\Models\Client;
+use App\Models\CollectionSession;
+use App\Models\Payment;
+use App\Models\Staff;
 use App\Services\TausiPosImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
-use Smalot\PdfParser\Parser;
 use Spatie\LaravelPdf\Facades\Pdf;
-use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\PdfToText\Pdf as PdfTextExtractor;
 use Spatie\QueryBuilder\AllowedFilter;
-use App\Mail\PaymentReceipt;
-use Illuminate\Support\Facades\Mail;
+use Spatie\QueryBuilder\QueryBuilder;
 
 class TransactionController extends Controller
 {
+    /**
+     * Display a listing of transactions.
+     */
     public function index(Request $request)
     {
         $payments = QueryBuilder::for(Payment::class)
@@ -48,13 +53,17 @@ class TransactionController extends Controller
             ->paginate(50)
             ->withQueryString();
 
-        $summary = [
-            'total' => Payment::count(),
-            'total_amount' => Payment::where('status', 'paid')->sum('amount'),
-            'paid' => Payment::where('status', 'paid')->count(),
-            'pending_reconciliation' => Payment::where('is_reconciled', false)->count(),
-            'unmatched' => Payment::whereHas('client', fn($q) => $q->where('client_number', 'WCP-UNKNOWN'))->count(),
-        ];
+            $summary = [
+                'total' => Payment::count(),
+                // 🚀 Total cash physically collected by staff (Paid + Unpaid bank statuses)
+                'total_amount' => Payment::sum('amount'),
+                'bank_deposited_amount' => Payment::where('status', 'paid')->sum('amount'),
+                'pending_deposit_amount' => Payment::where('status', 'pending')->sum('amount'),
+                'paid' => Payment::where('status', 'paid')->count(),
+                'pending' => Payment::where('status', 'pending')->count(),
+                'pending_reconciliation' => Payment::where('is_reconciled', false)->count(),
+                'unmatched' => Payment::whereHas('client', fn($q) => $q->where('client_number', 'WCP-UNKNOWN'))->count(),
+            ];
 
         $bankDeposits = BankDeposit::where('status', 'pending')->get()->map(fn($d) => [
             'id' => $d->id,
@@ -67,11 +76,14 @@ class TransactionController extends Controller
             'payments' => $payments,
             'summary' => $summary,
             'filters' => $request->only(['search', 'status', 'month', 'collector_id', 'payment_method', 'reconciled']),
-            'collectors' => \App\Models\Staff::with('user')->get()->map(fn($s) => ['id' => $s->id, 'name' => $s->user?->name]),
+            'collectors' => Staff::with('user')->get()->map(fn($s) => ['id' => $s->id, 'name' => $s->user?->name]),
             'bankDeposits' => $bankDeposits,
         ]);
     }
 
+    /**
+     * Store a newly created payment in storage.
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -85,14 +97,16 @@ class TransactionController extends Controller
 
         DB::beginTransaction();
         try {
-            // Generate unique control number
             $controlNumber = $this->generateControlNumber();
-
             $staff = auth()->user()->staff;
 
-            $session = \App\Models\CollectionSession::firstOrCreate(
-                ['session_reference' => 'MANUAL-'.now()->format('Ymd')],
-                ['staff_id' => $staff?->id ?? 1, 'session_date' => now()->toDateString(), 'status' => 'open']
+            $session = CollectionSession::firstOrCreate(
+                ['session_reference' => 'MANUAL-' . now()->format('Ymd')],
+                [
+                    'staff_id' => $staff?->id ?? 1,
+                    'session_date' => now()->toDateString(),
+                    'status' => 'open',
+                ]
             );
 
             $payment = Payment::create(array_merge($validated, [
@@ -100,13 +114,13 @@ class TransactionController extends Controller
                 'staff_id' => $staff?->id,
                 'collection_session_id' => $session->id,
                 'status' => 'paid',
-                'bill_reference' => 'INV-'.Str::random(8),
-                'is_reconciled' => $validated['payment_method'] === 'cash' ? true : false,
+                'bill_reference' => 'INV-' . Str::random(8),
+                'is_reconciled' => $validated['payment_method'] === 'cash',
             ]));
 
             AuditLog::log('payment.create', 'Payment', $payment->id, $validated);
-
             DB::commit();
+
             return redirect()->route('transactions.show', $payment)->with('success', 'Payment recorded.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -114,19 +128,26 @@ class TransactionController extends Controller
         }
     }
 
+    /**
+     * Generate a unique control number.
+     */
     private function generateControlNumber(): string
     {
         do {
-            $number = 'PAY-'.now()->format('Ymd').'-'.rand(1000, 9999);
+            $number = 'PAY-' . now()->format('Ymd') . '-' . rand(1000, 9999);
         } while (Payment::where('control_number', $number)->exists());
+
         return $number;
     }
 
+    /**
+     * Process a refund for a payment.
+     */
     public function refund(Payment $payment, Request $request)
     {
         $validator = Validator::make($request->all(), [
             'reason' => 'required|string|max:500',
-            'refund_amount' => 'required|numeric|min:0|max:'.$payment->amount,
+            'refund_amount' => 'required|numeric|min:0|max:' . $payment->amount,
         ]);
 
         if ($validator->fails()) {
@@ -143,8 +164,8 @@ class TransactionController extends Controller
             ]);
 
             AuditLog::log('payment.refund', 'Payment', $payment->id, $request->only('reason', 'refund_amount'));
-
             DB::commit();
+
             return back()->with('success', 'Payment refunded.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -152,6 +173,9 @@ class TransactionController extends Controller
         }
     }
 
+    /**
+     * Send a receipt email to the client.
+     */
     public function sendReceiptEmail(Payment $payment)
     {
         if (!$payment->client || !$payment->client->email) {
@@ -159,9 +183,13 @@ class TransactionController extends Controller
         }
 
         Mail::to($payment->client->email)->send(new PaymentReceipt($payment));
-        return back()->with('success', 'Receipt sent to '.$payment->client->email);
+
+        return back()->with('success', 'Receipt sent to ' . $payment->client->email);
     }
 
+    /**
+     * Reconcile selected payments with a bank deposit.
+     */
     public function reconcileWithBank(Request $request)
     {
         $request->validate([
@@ -185,11 +213,14 @@ class TransactionController extends Controller
                 'bank_deposit_id' => $deposit->id,
             ]);
 
-            $deposit->update(['status' => 'confirmed', 'reconciled_at' => now()]);
+            $deposit->update([
+                'status' => 'confirmed',
+                'reconciled_at' => now(),
+            ]);
 
             AuditLog::log('payment.reconcile', 'BankDeposit', $deposit->id, ['payment_ids' => $request->payment_ids]);
-
             DB::commit();
+
             return response()->json(['success' => true, 'message' => 'Reconciliation completed.']);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -197,6 +228,9 @@ class TransactionController extends Controller
         }
     }
 
+    /**
+     * Export a batch of selected payments as PDF.
+     */
     public function exportBatch(Request $request)
     {
         $ids = $request->input('ids', []);
@@ -204,7 +238,7 @@ class TransactionController extends Controller
 
         return Pdf::view('pdf.transactions-batch', ['payments' => $payments])
             ->landscape()
-            ->download('payments-'.now()->format('Ymd_His').'.pdf');
+            ->download('payments-' . now()->format('Ymd_His') . '.pdf');
     }
 
     /**
@@ -225,33 +259,29 @@ class TransactionController extends Controller
                 'required',
                 'file',
                 'max:10240',
-                'mimetypes:application/pdf,'
-                    . 'application/vnd.ms-excel,'
-                    . 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
-                    . 'text/csv',
+                'mimetypes:application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv',
             ],
         ]);
 
-        $file     = $request->file('file');
-        $path     = $file->store('imports/temp', 'local');
+        $file = $request->file('file');
+        $path = $file->store('imports/temp', 'local');
         $fullPath = Storage::disk('local')->path($path);
-        $mime     = $file->getMimeType();
+        $mime = $file->getMimeType();
 
-        // Handle PDF files directly using Smalot PDF Parser
+        // Handle PDF files using Spatie PDF-to-Text
         if ($mime === 'application/pdf') {
             try {
-                $parser = new Parser();
-                $pdf = $parser->parseFile($fullPath);
-                $text = $pdf->getText();
-                
-                // Parse the extracted text using your Tausi service
+                $text = (new PdfTextExtractor())
+                    ->setPdf($fullPath)
+                    ->addOptions(['-layout'])
+                    ->text();
+
                 $result = app(TausiPosImportService::class)->previewFromText($text);
-                
-                // Store for later import
                 session(['import_temp_path' => $path, 'import_mime' => $mime]);
-                
+
                 return response()->json($result);
             } catch (\Exception $e) {
+                Storage::disk('local')->delete($path);
                 return response()->json([
                     'success' => false,
                     'message' => 'Failed to parse PDF: ' . $e->getMessage(),
@@ -259,13 +289,18 @@ class TransactionController extends Controller
             }
         }
 
-        // For Excel/CSV files, use the existing service
-        $result = app(TausiPosImportService::class)->preview($fullPath, $mime);
-
-        // Keep temp file for the confirm step
-        session(['import_temp_path' => $path, 'import_mime' => $mime]);
-
-        return response()->json($result);
+        // For Excel/CSV files
+        try {
+            $result = app(TausiPosImportService::class)->preview($fullPath, $mime);
+            session(['import_temp_path' => $path, 'import_mime' => $mime]);
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Storage::disk('local')->delete($path);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to parse file: ' . $e->getMessage(),
+            ], 422);
+        }
     }
 
     /**
@@ -277,37 +312,39 @@ class TransactionController extends Controller
         $mime = session('import_mime');
 
         if (!$path || !Storage::disk('local')->exists($path)) {
-            return response()->json(['error' => 'Upload session expired. Please re-upload the file.'], 422);
+            return response()->json([
+                'success' => false,
+                'message' => 'Upload session expired. Please re-upload the file.',
+            ], 422);
         }
 
         $fullPath = Storage::disk('local')->path($path);
-        
-        // Handle PDF files
-        if ($mime === 'application/pdf') {
-            try {
-                $parser = new Parser();
-                $pdf = $parser->parseFile($fullPath);
-                $text = $pdf->getText();
-                
+
+        try {
+            if ($mime === 'application/pdf') {
+                $text = (new PdfTextExtractor())
+                    ->setPdf($fullPath)
+                    ->addOptions(['-layout'])
+                    ->text();
+
                 $result = app(TausiPosImportService::class)->importFromText($text);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to import PDF: ' . $e->getMessage(),
-                ], 422);
+            } else {
+                $result = app(TausiPosImportService::class)->import($fullPath, $mime);
             }
-        } else {
-            $result = app(TausiPosImportService::class)->import($fullPath, $mime);
+
+            session(['last_imported_ids' => $result['imported_ids'] ?? []]);
+            Storage::disk('local')->delete($path);
+            session()->forget(['import_temp_path', 'import_mime']);
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Storage::disk('local')->delete($path);
+            session()->forget(['import_temp_path', 'import_mime']);
+            return response()->json([
+                'success' => false,
+                'message' => 'Import failed: ' . $e->getMessage(),
+            ], 422);
         }
-
-        // Store IDs of freshly imported payments for later PDF export
-        session(['last_imported_ids' => $result['imported_ids'] ?? []]);
-
-        // Clean up temporary file
-        Storage::disk('local')->delete($path);
-        session()->forget(['import_temp_path', 'import_mime']);
-
-        return response()->json($result);
     }
 
     /**
@@ -370,27 +407,11 @@ class TransactionController extends Controller
             ->get();
 
         return Pdf::view('pdf.transactions', [
-                'payments' => $payments,
-                'filters'  => $request->only(['month', 'collector_id', 'search']),
-            ])
-            ->landscape()
-            ->download('transactions-' . now()->format('Y-m-d') . '.pdf');
-    }
-
-    /**
-     * Export the just-imported transactions as PDF.
-     */
-    public function exportImportedPdf(Request $request)
-    {
-        $ids = session('last_imported_ids', []);
-        $payments = Payment::whereIn('id', $ids)->with(['client', 'staff.user'])->get();
-
-        return Pdf::view('pdf.imported-transactions', [
-                'payments' => $payments,
-                'title'    => 'Imported Transactions – ' . now()->format('d M Y'),
-            ])
-            ->landscape()
-            ->download('imported-transactions.pdf');
+            'payments' => $payments,
+            'filters' => $request->only(['month', 'collector_id', 'search']),
+        ])
+        ->landscape()
+        ->download('transactions-' . now()->format('Y-m-d') . '.pdf');
     }
 
     /**
@@ -399,10 +420,10 @@ class TransactionController extends Controller
     public function downloadPdf(Payment $payment)
     {
         return Pdf::view('pdf.transaction-single', [
-                'payment' => $payment->load(['client', 'staff.user', 'collectionSession', 'invoice']),
-            ])
-            ->landscape()
-            ->download("transaction-{$payment->id}.pdf");
+            'payment' => $payment->load(['client', 'staff.user', 'collectionSession', 'invoice']),
+        ])
+        ->landscape()
+        ->download("transaction-{$payment->id}.pdf");
     }
 
     /**
@@ -417,34 +438,59 @@ class TransactionController extends Controller
         }
 
         return Inertia::render('Transactions/Index', [
-            'payments'   => $this->index($request)->toResponse($request)->getData(true)['props']['payments'] ?? [],
+            'payments' => $this->index($request)->toResponse($request)->getData(true)['props']['payments'] ?? [],
             'selectedTx' => $payment,
         ]);
     }
 
+    /**
+     * Update the specified payment in storage.
+     */
     public function update(Request $request, Payment $payment)
     {
         $validated = $request->validate([
-            'payer_name'     => 'nullable|string|max:255',
-            'amount'         => 'required|numeric|min:0',
+            'payer_name' => 'nullable|string|max:255',
+            'amount' => 'required|numeric|min:0',
             'payment_method' => 'required|in:cash,mobile_money,bank',
-            'status'         => 'required|in:paid,pending,refunded',
-            'paid_at'        => 'nullable|date',
-            'notes'          => 'nullable|string',
+            'status' => 'required|in:paid,pending,refunded',
+            'paid_at' => 'nullable|date',
+            'notes' => 'nullable|string',
         ]);
 
         $old = $payment->only(array_keys($validated));
         $payment->update($validated);
+
         AuditLog::log('payment.update', 'Payment', $payment->id, $validated, $old);
 
         return back()->with('success', 'Transaction updated.');
     }
 
+    /**
+     * Remove the specified payment from storage.
+     */
     public function destroy(Payment $payment)
     {
         AuditLog::log('payment.delete', 'Payment', $payment->id, null, $payment->toArray());
         $payment->delete();
+
         return back()->with('success', 'Transaction deleted.');
+    }
+    /**
+     * Export the just-imported transactions as PDF.
+     */
+    public function exportImportedPdf(Request $request)
+    {
+        $ids = session('last_imported_ids', []);
+        $payments = Payment::whereIn('id', $ids)
+            ->with(['client', 'staff.user'])
+            ->get();
+
+        return Pdf::view('pdf.imported-transactions', [
+            'payments' => $payments,
+            'title'    => 'Imported Transactions – ' . now()->format('d M Y'),
+        ])
+            ->landscape()
+            ->download('imported-transactions.pdf');
     }
 
     /**
@@ -453,9 +499,9 @@ class TransactionController extends Controller
     public function create(Request $request)
     {
         return Inertia::render('Transactions/Create', [
-            'clients' => \App\Models\Client::active()
-                        ->orderBy('name')
-                        ->get(['id', 'client_number', 'name', 'monthly_fee']),
+            'clients' => Client::active()
+                ->orderBy('name')
+                ->get(['id', 'client_number', 'name', 'monthly_fee']),
         ]);
     }
 }

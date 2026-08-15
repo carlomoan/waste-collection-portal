@@ -67,7 +67,7 @@
             </div>
             <div class="role-description">{{ role.description }}</div>
             <div class="role-permissions">
-              <span v-for="permission in role.permissions" :key="permission" class="permission-tag">{{ permission }}</span>
+              <span v-for="permission in role.permissions" :key="permission.id" class="permission-tag">{{ permission.name }}</span>
             </div>
             <div class="role-actions">
               <button class="role-action" @click="openViewRole(role)">View</button>

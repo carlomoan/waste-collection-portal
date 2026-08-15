@@ -1,0 +1,18 @@
+2026-08-10 15:43:38.564 EAT [6] LOG:  starting PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-08-10 15:43:38.564 EAT [6] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-08-10 15:43:38.565 EAT [6] FATAL:  could not open lock file "/var/run/postgresql/.s.PGSQL.5432.lock": Permission denied
+2026-08-10 15:43:38.571 EAT [6] LOG:  database system is shut down
+2026-08-10 15:43:57.210 EAT [8] LOG:  starting PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-08-10 15:43:57.210 EAT [8] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-08-10 15:43:57.211 EAT [8] FATAL:  could not open lock file "/var/run/postgresql/.s.PGSQL.5432.lock": Permission denied
+2026-08-10 15:43:57.219 EAT [8] LOG:  database system is shut down
+2026-08-10 15:48:13.930 EAT [7] LOG:  starting PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-08-10 15:48:13.930 EAT [7] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-08-10 15:48:13.933 EAT [7] LOG:  could not create Unix socket for address "/home/andrew/PhProjects/waste-collection-portal/storage/postgres/run/.s.PGSQL.5432": Operation not permitted
+2026-08-10 15:48:13.933 EAT [7] WARNING:  could not create Unix-domain socket in directory "/home/andrew/PhProjects/waste-collection-portal/storage/postgres/run"
+2026-08-10 15:48:13.933 EAT [7] FATAL:  could not create any Unix-domain sockets
+2026-08-10 15:48:13.937 EAT [7] LOG:  database system is shut down
+2026-08-10 15:48:53.079 EAT [7] LOG:  starting PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-08-10 15:48:53.080 EAT [7] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-08-10 15:48:53.086 EAT [10] LOG:  database system was shut down at 2026-08-10 15:43:31 EAT
+2026-08-10 15:48:53.102 EAT [7] LOG:  database system is ready to accept connections

@@ -1,10 +1,13 @@
 <template>
   <AppLayout title="Import Transactions">
-
     <!-- Step indicator -->
     <div class="steps-bar">
-      <div v-for="(step, i) in steps" :key="step.key"
-           class="step" :class="{ 'step--active': currentStep === i, 'step--done': currentStep > i }">
+      <div
+        v-for="(step, i) in steps"
+        :key="step.key"
+        class="step"
+        :class="{ 'step--active': currentStep === i, 'step--done': currentStep > i }"
+      >
         <div class="step-circle">
           <svg v-if="currentStep > i" xmlns="http://www.w3.org/2000/svg" fill="none"
                viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" width="14" height="14">
@@ -21,8 +24,10 @@
     <!-- ── STEP 0: Upload ─────────────────────────────────────────────── -->
     <div v-if="currentStep === 0" class="card step-card">
       <h2 class="card-title">Upload POS Report</h2>
-      <p class="card-sub">Accepts Tausi POS PDF reports or Excel/CSV files. The system will parse
-        all transactions, detect new clients, and let you review before importing.</p>
+      <p class="card-sub">
+        Accepts Tausi POS PDF reports or Excel/CSV files. The system will parse
+        all transactions, detect new clients, and let you review before importing.
+      </p>
 
       <div
         class="drop-zone"
@@ -32,9 +37,13 @@
         @drop.prevent="onDrop"
         @click="$refs.fileInput.click()"
       >
-        <input ref="fileInput" type="file"
-               accept=".pdf,.xlsx,.xls,.csv" class="hidden-input"
-               @change="onFileSelected" />
+        <input
+          ref="fileInput"
+          type="file"
+          accept=".pdf,.xlsx,.xls,.csv"
+          class="hidden-input"
+          @change="onFileSelected"
+        />
 
         <div v-if="!selectedFile" class="drop-content">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -67,8 +76,11 @@
       </div>
 
       <div class="step-footer">
-        <button class="btn-primary" :disabled="!selectedFile || parsing"
-                @click="parseFile">
+        <button
+          class="btn-primary"
+          :disabled="!selectedFile || parsing"
+          @click="parseFile"
+        >
           <span v-if="parsing" class="spinner" />
           {{ parsing ? 'Parsing file…' : 'Parse & Preview →' }}
         </button>
@@ -79,7 +91,6 @@
 
     <!-- ── STEP 1: Preview ───────────────────────────────────────────── -->
     <div v-if="currentStep === 1" class="step-card">
-
       <!-- Summary strip -->
       <div class="preview-summary">
         <div class="ps-item">
@@ -120,43 +131,55 @@
         <div class="card-head">
           <span class="card-title">Parsed Transactions ({{ preview.rows?.length }})</span>
           <div class="filter-tabs">
-            <button v-for="f in rowFilters" :key="f.key"
-                    class="ftab" :class="{ 'ftab--active': rowFilter === f.key }"
-                    @click="rowFilter = f.key">{{ f.label }}</button>
+            <button
+              v-for="f in rowFilters"
+              :key="f.key"
+              class="ftab"
+              :class="{ 'ftab--active': rowFilter === f.key }"
+              @click="rowFilter = f.key"
+            >{{ f.label }}</button>
           </div>
         </div>
+
         <div class="table-scroll">
           <table class="preview-table">
             <thead>
               <tr>
                 <th>No.</th>
+                <th>Receipt</th>
                 <th>Control Number</th>
                 <th>Payer / Client</th>
                 <th>Amount</th>
-                <th>Receipt</th>
+                <th>Collector</th>
                 <th>Date</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, i) in filteredRows" :key="row.control_number"
-                  :class="{ 'row--duplicate': row.already_exists, 'row--new-client': row.will_create_client }">
+              <tr
+                v-for="(row, i) in filteredRows"
+                :key="row.receipt_number || i"
+                :class="{ 'row--duplicate': row.already_exists, 'row--new-client': row.will_create_client }"
+              >
                 <td class="td-num">{{ i + 1 }}</td>
+                <td class="td-mono small">{{ row.receipt_number || '—' }}</td>
                 <td class="td-mono">{{ row.control_number }}</td>
                 <td>
                   <div class="client-cell">
-                    <span class="client-name">{{ row.client_name || row.payer_name || '—' }}</span>
+                    <span class="client-name">{{ row.payer_name || '—' }}</span>
                     <span v-if="row.will_create_client" class="badge-new">NEW</span>
-                    <span v-if="row.client_found" class="badge-found">MATCHED</span>
                   </div>
                 </td>
                 <td class="td-amount">{{ formatTZS(row.amount) }}</td>
-                <td class="td-mono small">{{ row.receipt_number }}</td>
+                <td class="td-collector">{{ row.collector_name || '—' }}</td>
                 <td class="td-date">{{ formatDate(row.paid_at) }}</td>
                 <td>
                   <span v-if="row.already_exists" class="status-skip">DUPLICATE</span>
                   <span v-else class="status-import">IMPORT</span>
                 </td>
+              </tr>
+              <tr v-if="!filteredRows.length">
+                <td colspan="8" class="empty-row">No rows match this filter.</td>
               </tr>
             </tbody>
           </table>
@@ -165,7 +188,7 @@
 
       <div class="step-footer">
         <button class="btn-secondary" @click="currentStep = 0">← Back</button>
-        <button class="btn-primary" @click="currentStep = 2">
+        <button class="btn-primary" @click="currentStep = 2" :disabled="preview.will_import === 0">
           Confirm & Import {{ preview.will_import }} records →
         </button>
       </div>
@@ -229,82 +252,86 @@
         {{ results.errors?.length ? 'Import completed with warnings' : 'Import Successful!' }}
       </h2>
 
-      <div class="results-grid">
+      <div class="results-grid" style="grid-template-columns: repeat(4, 1fr);">
         <div class="rg-item rg-item--green">
           <span class="rg-val">{{ results.imported }}</span>
-          <span class="rg-label">Payments Imported</span>
-        </div>
-        <div class="rg-item rg-item--amber" v-if="results.skipped">
-          <span class="rg-val">{{ results.skipped }}</span>
-          <span class="rg-label">Duplicates Skipped</span>
-        </div>
-        <div class="rg-item rg-item--blue" v-if="results.clients_created">
-          <span class="rg-val">{{ results.clients_created }}</span>
-          <span class="rg-label">Clients Created</span>
+          <span class="rg-label">Records Imported</span>
         </div>
         <div class="rg-item">
           <span class="rg-val">{{ formatTZS(results.total_amount) }}</span>
-          <span class="rg-label">Total Amount</span>
+          <span class="rg-label">Grand Total (All)</span>
+        </div>
+        <div class="rg-item rg-item--green">
+          <span class="rg-val">{{ formatTZS(results.total_amount_paid) }}</span>
+          <span class="rg-label">Total PAID (Cash)</span>
+        </div>
+        <div class="rg-item rg-item--amber" v-if="results.total_amount_pending > 0">
+          <span class="rg-val">{{ formatTZS(results.total_amount_pending) }}</span>
+          <span class="rg-label">Total NOT PAID (Bank Ref)</span>
         </div>
       </div>
 
       <div v-if="results.errors?.length" class="errors-list">
         <p class="errors-title">Errors ({{ results.errors.length }}):</p>
-        <p v-for="err in results.errors" :key="err" class="error-line">{{ err }}</p>
+        <p v-for="err in results.errors.slice(0, 10)" :key="err" class="error-line">{{ err }}</p>
+        <p v-if="results.errors.length > 10" class="error-line">... and {{ results.errors.length - 10 }} more</p>
+      </div>
+
+      <div v-if="results.warnings?.length" class="warnings-list">
+        <p class="warnings-title">Warnings ({{ results.warnings.length }}):</p>
+        <p v-for="warn in results.warnings.slice(0, 5)" :key="warn" class="warning-line">{{ warn }}</p>
       </div>
 
       <div class="step-footer">
-  <button class="btn-secondary" @click="resetWizard">Import Another File</button>
-  
-  <!-- 👇 NEW PDF button (visible only if transactions were imported) -->
-  <a v-if="results.imported > 0"
-     :href="route('transactions.export-imported-pdf')"
-     class="btn-primary"
-     target="_blank">
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-         stroke-width="1.8" stroke="currentColor" width="14" height="14">
-      <path stroke-linecap="round" stroke-linejoin="round"
-            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
-    </svg>
-    Download PDF
-  </a>
-  
-  <Link href="/transactions" class="btn-primary">View Transactions →</Link>
-</div>
+        <button class="btn-secondary" @click="resetWizard">Import Another File</button>
+        <a
+          v-if="results.imported > 0"
+          :href="route('transactions.export.imported-pdf')"
+          class="btn-primary"
+          target="_blank"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+               stroke-width="1.8" stroke="currentColor" width="14" height="14">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          Download PDF
+        </a>
+        <Link href="/transactions" class="btn-primary">View Transactions →</Link>
+      </div>
     </div>
-
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 import { Link } from '@inertiajs/vue3'
+import { route } from 'ziggy-js'
 import axios from 'axios'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
 const steps = [
-  { key: 'upload',  label: 'Upload File' },
+  { key: 'upload', label: 'Upload File' },
   { key: 'preview', label: 'Preview Data' },
   { key: 'confirm', label: 'Confirm' },
   { key: 'results', label: 'Results' },
 ]
 
-const currentStep  = ref(0)
-const isDragging   = ref(false)
+const currentStep = ref(0)
+const isDragging = ref(false)
 const selectedFile = ref(null)
-const parsing      = ref(false)
-const importing    = ref(false)
-const parseError   = ref(null)
-const preview      = ref({})
-const results      = ref({})
-const rowFilter    = ref('all')
-const fileInput    = ref(null)
+const parsing = ref(false)
+const importing = ref(false)
+const parseError = ref(null)
+const preview = ref({})
+const results = ref({})
+const rowFilter = ref('all')
 
 const rowFilters = [
-  { key: 'all',       label: 'All' },
-  { key: 'import',    label: 'To Import' },
+  { key: 'all', label: 'All' },
+  { key: 'import', label: 'To Import' },
   { key: 'duplicate', label: 'Duplicates' },
-  { key: 'new',       label: 'New Clients' },
+  { key: 'new', label: 'New Clients' },
 ]
 
 const fileSize = computed(() => {
@@ -315,9 +342,9 @@ const fileSize = computed(() => {
 
 const filteredRows = computed(() => {
   const rows = preview.value?.rows ?? []
-  if (rowFilter.value === 'import')    return rows.filter(r => !r.already_exists)
+  if (rowFilter.value === 'import') return rows.filter(r => !r.already_exists)
   if (rowFilter.value === 'duplicate') return rows.filter(r => r.already_exists)
-  if (rowFilter.value === 'new')       return rows.filter(r => r.will_create_client)
+  if (rowFilter.value === 'new') return rows.filter(r => r.will_create_client)
   return rows
 })
 
@@ -333,26 +360,27 @@ function onFileSelected(e) {
 }
 
 function setFile(file) {
-  const allowed = ['application/pdf',
+  const allowed = [
+    'application/pdf',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/csv']
+    'text/csv'
+  ]
   if (!allowed.includes(file.type) && !file.name.match(/\.(pdf|xlsx|xls|csv)$/i)) {
     parseError.value = 'Unsupported file type. Please upload a PDF, Excel, or CSV file.'
     return
   }
   selectedFile.value = file
-  parseError.value   = null
+  parseError.value = null
 }
 
 function clearFile() {
   selectedFile.value = null
-  if (fileInput.value) fileInput.value.value = ''
 }
 
 async function parseFile() {
   if (!selectedFile.value) return
-  parsing.value    = true
+  parsing.value = true
   parseError.value = null
 
   const formData = new FormData()
@@ -362,7 +390,13 @@ async function parseFile() {
     const { data } = await axios.post('/transactions/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    preview.value  = data
+
+    if (data.success === false) {
+      parseError.value = data.message || 'Failed to parse file.'
+      return
+    }
+
+    preview.value = data
     currentStep.value = 1
   } catch (err) {
     parseError.value = err.response?.data?.message
@@ -376,27 +410,43 @@ async function parseFile() {
 async function runImport() {
   importing.value = true
   try {
-    const { data } = await axios.post('/transactions/import/confirm')
-    results.value     = data
+    const { data } = await axios.post('/transactions/confirm-import', {}, {
+      timeout: 120000 // 2-minute timeout for large files
+    })
+
+    if (data.success === false) {
+      alert(data.message || 'Import failed.')
+      currentStep.value = 1 // Go back to preview
+      return
+    }
+
+    results.value = data
     currentStep.value = 3
   } catch (err) {
-    alert(err.response?.data?.error ?? 'Import failed. Please try again.')
+    // Catch 500 Fatal Errors and network timeouts gracefully
+    const msg = err.response?.data?.message
+             || err.response?.data?.exception
+             || err.message
+             || 'Server error. Please check your logs and try again.'
+
+    alert(msg)
+    currentStep.value = 1 // Return to preview step so user can retry
   } finally {
     importing.value = false
   }
 }
 
 function resetWizard() {
-  currentStep.value  = 0
+  currentStep.value = 0
   selectedFile.value = null
-  preview.value      = {}
-  results.value      = {}
-  parseError.value   = null
-  rowFilter.value    = 'all'
+  preview.value = {}
+  results.value = {}
+  parseError.value = null
+  rowFilter.value = 'all'
 }
 
-const formatTZS  = v => new Intl.NumberFormat('sw-TZ', { minimumFractionDigits: 0 }).format(v ?? 0)
-const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'
+const formatTZS = v => new Intl.NumberFormat('sw-TZ', { minimumFractionDigits: 0 }).format(v ?? 0)
+const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 </script>
 
 <style scoped>
@@ -414,10 +464,10 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'sho
   font-size: 12px; font-weight: 600; color: #7a9489; flex-shrink: 0;
 }
 .step--active .step-circle { border-color: #4caf76; color: #2d7a50; background: #f0faf3; }
-.step--done   .step-circle { border-color: #4caf76; background: #4caf76; color: #fff; }
+.step--done .step-circle { border-color: #4caf76; background: #4caf76; color: #fff; }
 .step-label { font-size: 12px; color: #7a9489; margin-left: 8px; white-space: nowrap; }
 .step--active .step-label { color: #1a2e24; font-weight: 500; }
-.step--done   .step-label { color: #2d7a50; }
+.step--done .step-label { color: #2d7a50; }
 .step-line {
   flex: 1; height: 2px; background: rgba(0,0,0,0.1);
   margin: 0 12px; min-width: 20px;
@@ -442,11 +492,11 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'sho
 .hidden-input { display: none; }
 .drop-icon { color: #a8ddb8; margin: 0 auto 12px; }
 .drop-title { font-size: 14px; font-weight: 500; color: #1a2e24; margin-bottom: 4px; }
-.drop-hint  { font-size: 12px; color: #7a9489; }
+.drop-hint { font-size: 12px; color: #7a9489; }
 .file-selected { display: flex; align-items: center; gap: 12px; justify-content: center; }
-.file-icon   { color: #4caf76; flex-shrink: 0; }
-.file-name   { font-size: 13px; font-weight: 500; color: #1a2e24; }
-.file-size   { font-size: 11px; color: #7a9489; }
+.file-icon { color: #4caf76; flex-shrink: 0; }
+.file-name { font-size: 13px; font-weight: 500; color: #1a2e24; }
+.file-size { font-size: 11px; color: #7a9489; }
 .file-remove {
   background: none; border: none; cursor: pointer; color: #c0392b;
   font-size: 14px; margin-left: 8px;
@@ -493,10 +543,10 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'sho
 .ps-item { flex: 1; padding: 12px 16px; text-align: center; border-right: 1px solid rgba(0,0,0,0.06); }
 .ps-item:last-child { border-right: none; }
 .ps-label { display: block; font-size: 10px; color: #7a9489; text-transform: uppercase; letter-spacing: 0.6px; }
-.ps-val   { display: block; font-size: 18px; font-weight: 600; color: #1a2e24; margin-top: 2px; }
+.ps-val { display: block; font-size: 18px; font-weight: 600; color: #1a2e24; margin-top: 2px; }
 .ps-item--green .ps-val { color: #2d7a50; }
 .ps-item--amber .ps-val { color: #b88a00; }
-.ps-item--blue  .ps-val { color: #3b5cb8; }
+.ps-item--blue .ps-val { color: #3b5cb8; }
 
 /* New clients notice */
 .new-clients-notice {
@@ -522,17 +572,17 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'sho
 .preview-table tbody tr:hover { background: #f8faf9; }
 .row--duplicate { background: #fffdf0 !important; opacity: 0.6; }
 .row--new-client { background: #f0f4ff !important; }
-.td-num   { color: #7a9489; width: 40px; }
-.td-mono  { font-family: monospace; font-size: 11px; color: #4a6357; }
+.td-num { color: #7a9489; width: 40px; }
+.td-mono { font-family: monospace; font-size: 11px; color: #4a6357; }
 .td-amount { font-weight: 600; color: #2d7a50; }
-.td-date  { font-size: 11px; color: #7a9489; white-space: nowrap; }
-.small    { font-size: 10px; }
+.td-date { font-size: 11px; color: #7a9489; white-space: nowrap; }
+.td-collector { font-size: 11px; color: #4a6357; }
+.small { font-size: 10px; }
 .client-cell { display: flex; align-items: center; gap: 6px; }
 .client-name { font-size: 12px; color: #1a2e24; }
-.badge-new   { font-size: 8px; padding: 1px 5px; border-radius: 6px; background: #e8eeff; color: #2a3f80; font-weight: 600; }
-.badge-found { font-size: 8px; padding: 1px 5px; border-radius: 6px; background: #f0faf3; color: #2d7a50; font-weight: 600; }
+.badge-new { font-size: 8px; padding: 1px 5px; border-radius: 6px; background: #e8eeff; color: #2a3f80; font-weight: 600; }
 .status-import { font-size: 9px; padding: 2px 7px; border-radius: 8px; background: #f0faf3; color: #2d7a50; font-weight: 600; }
-.status-skip   { font-size: 9px; padding: 2px 7px; border-radius: 8px; background: #fdf6e3; color: #b88a00; font-weight: 600; }
+.status-skip { font-size: 9px; padding: 2px 7px; border-radius: 8px; background: #fdf6e3; color: #b88a00; font-weight: 600; }
 
 /* Row filters */
 .filter-tabs { display: flex; gap: 2px; }
@@ -546,10 +596,10 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'sho
 }
 .confirm-item { background: #f8faf9; border-radius: 8px; padding: 14px 16px; text-align: center; }
 .ci-label { display: block; font-size: 11px; color: #7a9489; margin-bottom: 6px; }
-.ci-val   { display: block; font-size: 22px; font-weight: 600; color: #1a2e24; }
+.ci-val { display: block; font-size: 22px; font-weight: 600; color: #1a2e24; }
 .ci-val--green { color: #2d7a50; }
 .ci-val--amber { color: #b88a00; }
-.ci-val--blue  { color: #3b5cb8; }
+.ci-val--blue { color: #3b5cb8; }
 .confirm-note {
   font-size: 12px; color: #7a9489; background: #fdf6e3;
   border: 1px solid #f5c842; border-radius: 8px; padding: 12px 14px;
@@ -561,7 +611,7 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'sho
   display: flex; align-items: center; justify-content: center;
   margin: 0 auto 16px;
 }
-.result-icon--ok   { background: #f0faf3; color: #2d7a50; }
+.result-icon--ok { background: #f0faf3; color: #2d7a50; }
 .result-icon--warn { background: #fdf6e3; color: #b88a00; }
 .result-title { font-size: 18px; font-weight: 600; color: #1a2e24; text-align: center; margin-bottom: 24px; }
 .results-grid {
@@ -569,16 +619,20 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month:'sho
   gap: 12px; margin-bottom: 20px;
 }
 .rg-item { background: #f8faf9; border-radius: 8px; padding: 14px; text-align: center; }
-.rg-val   { display: block; font-size: 24px; font-weight: 600; color: #1a2e24; }
+.rg-val { display: block; font-size: 24px; font-weight: 600; color: #1a2e24; }
 .rg-label { display: block; font-size: 11px; color: #7a9489; margin-top: 4px; }
 .rg-item--green .rg-val { color: #2d7a50; }
 .rg-item--amber .rg-val { color: #b88a00; }
-.rg-item--blue  .rg-val { color: #3b5cb8; }
+.rg-item--blue .rg-val { color: #3b5cb8; }
 .errors-list { background: #fef0f0; border: 1px solid #f5a5a5; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
 .errors-title { font-size: 12px; font-weight: 600; color: #c0392b; margin-bottom: 6px; }
 .error-line { font-size: 11px; color: #c0392b; margin-bottom: 2px; font-family: monospace; }
+.warnings-list { background: #fdf6e3; border: 1px solid #f5c842; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+.warnings-title { font-size: 12px; font-weight: 600; color: #b88a00; margin-bottom: 6px; }
+.warning-line { font-size: 11px; color: #b88a00; margin-bottom: 2px; }
 .error-banner {
   background: #fef0f0; border: 1px solid #f5a5a5;
   border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #c0392b; margin-top: 12px;
 }
+.empty-row { text-align: center; padding: 24px; color: #7a9489; }
 </style>

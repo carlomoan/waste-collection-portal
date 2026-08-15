@@ -1,75 +1,119 @@
 <template>
   <div class="schedule-card">
-    <div class="sched-day">{{ dayLabel }}</div>
-    <div class="sched-zone">
-      <span class="zone-dot" :style="{ background: zoneColor }" />
-      {{ zoneName }}
+    <div class="schedule-card__header">
+      <div class="schedule-card__day">{{ schedule.day }}</div>
+      <div class="schedule-card__time">
+        <span class="time-badge">{{ schedule.start_time }} - {{ schedule.end_time }}</span>
+      </div>
     </div>
-    <div class="sched-staff">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-           stroke-width="1.8" stroke="currentColor" width="12" height="12">
-        <path stroke-linecap="round" stroke-linejoin="round"
-          d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5
-             0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>
-      </svg>
-      {{ staffName }}
+    <div class="schedule-card__body">
+      <div class="schedule-card__zone">
+        <span class="zone-indicator" :style="{ backgroundColor: schedule.zone_color || '#4caf76' }"></span>
+        <span class="zone-name">{{ schedule.zone }}</span>
+      </div>
+      <div class="schedule-card__collector">
+        <svg class="collector-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <span class="collector-name">{{ schedule.staff }}</span>
+      </div>
+      <div class="schedule-card__clients">
+        <svg class="clients-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        <span class="clients-count">{{ schedule.client_count }} clients</span>
+      </div>
     </div>
-    <div class="sched-count">{{ clientCount }} clients scheduled</div>
   </div>
 </template>
 
 <script setup>
-defineProps({
-  dayLabel:    { type: String, required: true },
-  zoneName:    { type: String, required: true },
-  zoneColor:   { type: String, default: '#4caf76' },
-  staffName:   { type: String, required: true },
-  clientCount: { type: Number, default: 0 },
+import { defineProps } from 'vue'
+
+const props = defineProps({
+  schedule: {
+    type: Object,
+    required: true
+  }
 })
 </script>
 
 <style scoped>
 .schedule-card {
-  background: linear-gradient(135deg, #ffffff 0%, #f8faf9 100%);
-  border: 1.5px solid rgba(0,0,0,0.06);
-  border-radius: 14px; padding: 18px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  border: 1px solid rgb(229, 231, 235);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  transition: all 0.2s;
 }
 
 .schedule-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  transform: translateY(-2px);
+  border-color: rgb(209, 213, 219);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
-.sched-day {
-  font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
-  color: #7a9489; margin-bottom: 8px; font-weight: 600;
+.schedule-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgb(229, 231, 235);
 }
 
-.sched-zone {
-  font-size: 15px; font-weight: 700; color: #1a2e24;
-  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-  letter-spacing: -0.2px;
+.schedule-card__day {
+  font-weight: 600;
+  color: rgb(31, 41, 55);
+  font-size: 1rem;
 }
 
-.zone-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-}
-
-.sched-staff {
-  font-size: 12px; color: #4a6357;
-  display: flex; align-items: center; gap: 6px;
+.schedule-card__time .time-badge {
+  padding: 0.25rem 0.5rem;
+  background: rgb(239, 246, 255);
+  color: rgb(29, 78, 216);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
-.sched-count {
-  font-size: 11px; color: #7a9489; margin-top: 8px;
-  font-weight: 600;
-  background: rgba(76, 175, 118, 0.08);
-  padding: 6px 10px;
-  border-radius: 8px;
-  display: inline-block;
+.schedule-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.schedule-card__zone,
+.schedule-card__collector,
+.schedule-card__clients {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: rgb(75, 85, 99);
+}
+
+.zone-indicator {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.zone-name {
+  font-weight: 500;
+  color: rgb(31, 41, 55);
+}
+
+.collector-icon,
+.clients-icon {
+  width: 1rem;
+  height: 1rem;
+  color: rgb(107, 114, 128);
+  flex-shrink: 0;
+}
+
+.collector-name,
+.clients-count {
+  color: rgb(75, 85, 99);
 }
 </style>

@@ -66,16 +66,16 @@
         <span class="strip-val">{{ summary.total?.toLocaleString() }}</span>
       </div>
       <div class="strip-item">
-        <span class="strip-label">Total Collected</span>
+        <span class="strip-label">Total Collected (Cash)</span>
         <span class="strip-val green">{{ formatTZS(summary.total_amount) }}</span>
       </div>
       <div class="strip-item">
-        <span class="strip-label">Paid</span>
-        <span class="strip-val green">{{ summary.paid?.toLocaleString() }}</span>
+        <span class="strip-label">Bank Deposited (Paid)</span>
+        <span class="strip-val green">{{ formatTZS(summary.bank_deposited_amount) }} ({{ summary.paid }})</span>
       </div>
       <div class="strip-item">
-        <span class="strip-label">Unmatched</span>
-        <span class="strip-val amber">{{ summary.unmatched }}</span>
+        <span class="strip-label">Pending Deposit (Unpaid)</span>
+        <span class="strip-val amber">{{ formatTZS(summary.pending_deposit_amount) }} ({{ summary.pending }})</span>
       </div>
     </div>
 
@@ -111,13 +111,11 @@
               </div>
             </td>
             <td class="td-amount">{{ formatTZS(tx.amount) }}</td>
-            <td class="td-collector">{{ tx.collector ?? '—' }}</td>
-            <td class="td-mono small">{{ tx.receipt ?? '—' }}</td>
-            <td>
-              <span class="status-badge" :class="`status--${tx.status}`">
-                {{ tx.status?.toUpperCase() }}
-              </span>
-            </td>
+            <td class="td-collector">{{ tx.staff?.user?.name ?? '—' }}</td>
+            <td class="td-mono small">{{ tx.receipt_number ?? '—' }}</td>
+            <span class="status-badge" :class="`status--${tx.status}`">
+              {{ tx.status === 'pending' ? 'UNPAID' : tx.status?.toUpperCase() }}
+            </span>
             <td class="td-date">{{ formatDate(tx.paid_at) }}</td>
             <td class="td-actions">
               <button class="action-link" @click="openViewModal(tx)">View</button>
@@ -156,7 +154,7 @@
         <div class="drop-zone" @click="$refs.fileInput.click()">
           <input ref="fileInput" type="file" accept=".pdf,.xlsx,.xls,.csv" class="hidden-input"
             @change="onFileSelected" />
-          
+
           <div v-if="!selectedFile" class="drop-content">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
               stroke="currentColor" width="40" height="40" class="drop-icon">
@@ -216,13 +214,13 @@
     <!-- View Transaction Modal -->
     <Modal :show="showViewModal" title="Transaction Details" @close="showViewModal = false">
       <div v-if="viewingTx" class="detail-grid">
-        <div class="detail-row"><span class="detail-label">Receipt #</span><span class="detail-val mono">{{ viewingTx.receipt ?? '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Receipt #</span><span class="detail-val mono">{{ viewingTx.receipt_number ?? '—' }}</span></div>
         <div class="detail-row"><span class="detail-label">Control #</span><span class="detail-val mono">{{ viewingTx.control_number }}</span></div>
         <div class="detail-row"><span class="detail-label">Payer</span><span class="detail-val">{{ viewingTx.payer_name }}</span></div>
         <div class="detail-row"><span class="detail-label">Client #</span><span class="detail-val">{{ viewingTx.client_number ?? '—' }}</span></div>
         <div class="detail-row"><span class="detail-label">Amount</span><span class="detail-val amount">{{ formatTZS(viewingTx.amount) }} TZS</span></div>
         <div class="detail-row"><span class="detail-label">Method</span><span class="detail-val">{{ viewingTx.payment_method ?? '—' }}</span></div>
-        <div class="detail-row"><span class="detail-label">Collector</span><span class="detail-val">{{ viewingTx.collector ?? '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Collector</span><span class="detail-val">{{ viewingTx.staff?.user?.name ?? '—' }}</span></div>
         <div class="detail-row"><span class="detail-label">Status</span>
           <span class="status-badge" :class="`status--${viewingTx.status}`">{{ viewingTx.status?.toUpperCase() }}</span>
         </div>
@@ -371,21 +369,21 @@ const clearFile = () => {
 const processImport = async () => {
   if (!selectedFile.value) return
   previewLoading.value = true
-  
+
   const formData = new FormData()
   formData.append('file', selectedFile.value)
-  
+
   try {
     const previewRes = await axios.post('/transactions/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    
+
     if (previewRes.data) {
       importing.value = true
       previewLoading.value = false
-      
+
       const confirmRes = await axios.post('/transactions/confirm-import')
-      
+
       if (confirmRes.data) {
         alert(`Successfully imported ${confirmRes.data.imported} payments!`)
         showImportModal.value = false
@@ -396,8 +394,8 @@ const processImport = async () => {
       }
     }
   } catch (err) {
-    const errorMsg = err.response?.data?.message 
-      || err.response?.data?.error 
+    const errorMsg = err.response?.data?.message
+      || err.response?.data?.error
       || 'Failed to import. Please check file format and try again.'
     alert(errorMsg)
   } finally {
@@ -600,7 +598,7 @@ const processReconcile = () => {
 const exportBatch = () => {
   const formData = new FormData()
   selectedPayments.value.forEach(id => formData.append('ids[]', id))
-  
+
   fetch('/transactions/export-batch', {
     method: 'POST',
     headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
@@ -1134,5 +1132,9 @@ const now = () => new Date()
   font-size: 14px;
   cursor: pointer;
   padding: 4px;
+}
+.status--pending {
+  background: #fef3c7;
+  color: #92400e;
 }
 </style>

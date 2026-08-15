@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Client;
-use App\Models\Zone;
 use App\Models\ClientType;
-use App\Models\ClientContact;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\AuditLog;
+use App\Models\Zone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -30,27 +29,33 @@ class ClientController extends Controller
             ->get();
 
         return Inertia::render('Clients/Index', [
-            'clients' => $clients->map(fn($c) => array_merge($c->toArray(), ['client_type' => $c->clientType?->name, 'zone_name' => $c->zone?->name])),
-            'zones' => Zone::all(['id', 'name']),
+            'clients' => $clients->map(fn($c) => array_merge($c->toArray(), [
+                'client_type' => $c->clientType?->name,
+                'zone_name'   => $c->zone?->name,
+                'outstanding' => (float) Invoice::where('client_id', $c->id)
+                    ->whereIn('status', ['unpaid', 'partial', 'overdue'])
+                    ->sum('balance'),
+            ])),
+            'zones'       => Zone::all(['id', 'name']),
             'clientTypes' => ClientType::all(['id', 'name']),
-            'filters' => $request->only(['search', 'zone_id', 'status']),
+            'filters'     => $request->only(['search', 'zone_id', 'status']),
         ]);
     }
 
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'client_number' => 'required|string|unique:clients',
-            'phone' => 'required|string|max:20',
-            'email' => 'nullable|email|max:255',
-            'address' => 'nullable|string',
-            'zone_id' => 'required|exists:zones,id',
+            'name'           => 'required|string|max:255',
+            'client_number'  => 'nullable|string|unique:clients',
+            'phone'          => 'nullable|string|max:20',
+            'email'          => 'nullable|email|max:255',
+            'address'        => 'nullable|string',
+            'zone_id'        => 'required|exists:zones,id',
             'client_type_id' => 'nullable|exists:client_types,id',
-            'monthly_fee' => 'required|numeric|min:0',
-            'billing_day' => 'nullable|integer|min:1|max:31',
-            'status' => 'required|in:active,inactive,suspended',
-            'notes' => 'nullable|string',
+            'monthly_fee'    => 'required|numeric|min:0',
+            'billing_day'    => 'nullable|integer|min:1|max:31',
+            'status'         => 'required|in:active,inactive,suspended',
+            'notes'          => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -59,9 +64,15 @@ class ClientController extends Controller
 
         DB::beginTransaction();
         try {
-            $client = Client::create($request->all());
-            AuditLog::log('client.create', 'Client', $client->id, $request->all());
+            $data = $validator->validated();
+            if (empty($data['client_number'])) {
+                $data['client_number'] = 'WCP-' . str_pad(Client::count() + 1, 5, '0', STR_PAD_LEFT);
+            }
+
+            $client = Client::create($data);
+            AuditLog::log('client.create', 'Client', $client->id, $data);
             DB::commit();
+
             return back()->with('success', 'Client created.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -74,10 +85,13 @@ class ClientController extends Controller
         $client->load(['zone', 'clientType']);
 
         $recentPayments = Payment::where('client_id', $client->id)
-            ->orderBy('paid_at', 'desc')->limit(5)->get(['id','receipt_number','amount','status','paid_at']);
+            ->orderBy('paid_at', 'desc')
+            ->limit(5)
+            ->get(['id', 'receipt_number', 'amount', 'status', 'paid_at']);
 
         $outstandingBalance = Invoice::where('client_id', $client->id)
-            ->whereIn('status', ['unpaid', 'partial', 'overdue'])->sum('balance');
+            ->whereIn('status', ['unpaid', 'partial', 'overdue'])
+            ->sum('balance');
 
         $payload = [
             'client'             => $client,
@@ -95,26 +109,28 @@ class ClientController extends Controller
     public function edit(Client $client, Request $request)
     {
         $client->load(['zone', 'clientType']);
+
         if ($request->wantsJson()) {
             return response()->json(['client' => $client]);
         }
+
         return redirect()->route('clients.index');
     }
 
     public function update(Request $request, Client $client)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'client_number' => 'required|string|unique:clients,client_number,'.$client->id,
-            'phone' => 'required|string|max:20',
-            'email' => 'nullable|email',
-            'address' => 'nullable|string',
-            'zone_id' => 'required|exists:zones,id',
+            'name'           => 'required|string|max:255',
+            'client_number'  => 'required|string|unique:clients,client_number,' . $client->id,
+            'phone'          => 'nullable|string|max:20',
+            'email'          => 'nullable|email|max:255',
+            'address'        => 'nullable|string',
+            'zone_id'        => 'required|exists:zones,id',
             'client_type_id' => 'nullable|exists:client_types,id',
-            'monthly_fee' => 'required|numeric|min:0',
-            'billing_day' => 'nullable|integer|min:1|max:31',
-            'status' => 'required|in:active,inactive,suspended',
-            'notes' => 'nullable|string',
+            'monthly_fee'    => 'required|numeric|min:0',
+            'billing_day'    => 'nullable|integer|min:1|max:31',
+            'status'         => 'required|in:active,inactive,suspended',
+            'notes'          => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -123,10 +139,11 @@ class ClientController extends Controller
 
         DB::beginTransaction();
         try {
-            $old = $client->toArray();
-            $client->update($request->all());
-            AuditLog::log('client.update', 'Client', $client->id, ['old' => $old, 'new' => $request->all()]);
+            $old = $client->only(array_keys($validator->validated()));
+            $client->update($validator->validated());
+            AuditLog::log('client.update', 'Client', $client->id, $validator->validated(), $old);
             DB::commit();
+
             return back()->with('success', 'Client updated.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -139,11 +156,13 @@ class ClientController extends Controller
         if ($client->invoices()->exists() || $client->payments()->exists()) {
             return back()->with('error', 'Cannot delete client with financial records.');
         }
+
         DB::beginTransaction();
         try {
+            AuditLog::log('client.delete', 'Client', $client->id, null, $client->toArray());
             $client->delete();
-            AuditLog::log('client.delete', 'Client', $client->id);
             DB::commit();
+
             return back()->with('success', 'Client deleted.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -154,10 +173,10 @@ class ClientController extends Controller
     public function addContact(Request $request, Client $client)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'position' => 'nullable|string|max:100',
-            'phone' => 'required|string|max:20',
-            'email' => 'nullable|email',
+            'name'       => 'required|string|max:255',
+            'position'   => 'nullable|string|max:100',
+            'phone'      => 'required|string|max:20',
+            'email'      => 'nullable|email|max:255',
             'is_primary' => 'boolean',
         ]);
 
@@ -170,9 +189,11 @@ class ClientController extends Controller
             if ($request->is_primary) {
                 $client->contacts()->update(['is_primary' => false]);
             }
-            $contact = $client->contacts()->create($request->all());
-            AuditLog::log('client.add_contact', 'ClientContact', $contact->id);
+
+            $contact = $client->contacts()->create($validator->validated());
+            AuditLog::log('client.add_contact', 'ClientContact', $contact->id, $validator->validated());
             DB::commit();
+
             return back()->with('success', 'Contact added.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -183,21 +204,31 @@ class ClientController extends Controller
     public function export(Request $request)
     {
         $clients = Client::with(['zone', 'clientType'])->get();
-        $filename = "clients_".now()->format('Ymd_His').".csv";
-        $headers = ['Content-Type' => 'text/csv', 'Content-Disposition' => "attachment; filename={$filename}"];
 
-        $callback = function () use ($clients) {
+        return response()->stream(function () use ($clients) {
             $file = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
             fputcsv($file, ['Client #', 'Name', 'Phone', 'Email', 'Zone', 'Type', 'Monthly Fee', 'Status']);
+
             foreach ($clients as $c) {
                 fputcsv($file, [
-                    $c->client_number, $c->name, $c->phone, $c->email,
-                    $c->zone->name, $c->clientType?->name, $c->monthly_fee, $c->status,
+                    $c->client_number,
+                    $c->name,
+                    $c->phone,
+                    $c->email,
+                    $c->zone?->name,
+                    $c->clientType?->name,
+                    $c->monthly_fee,
+                    $c->status,
                 ]);
             }
+
             fclose($file);
-        };
-        return response()->stream($callback, 200, $headers);
+        }, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename=clients_' . now()->format('Ymd_His') . '.csv',
+        ]);
     }
 
     public function profile(Client $client)

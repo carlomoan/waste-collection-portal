@@ -1,102 +1,176 @@
 <template>
-  <div class="tx-row">
-    <div class="tx-avatar" :class="statusClass">{{ initials }}</div>
-    <div class="tx-body">
-      <div class="tx-name">{{ payerName || 'Unknown Payer' }}</div>
-      <div class="tx-meta">Ctrl: ...{{ controlSuffix }} · {{ formattedDate }}</div>
+  <div class="transaction-row">
+    <div class="transaction-row__info">
+      <div class="transaction-row__payer">{{ transaction.payerName || transaction.payer_name }}</div>
+      <div class="transaction-row__meta">
+        <span class="transaction-row__control">{{ transaction.controlNumber || transaction.control_number }}</span>
+        <span class="transaction-row__date">{{ formatDate(transaction.paidAt || transaction.paid_at) }}</span>
+      </div>
     </div>
-    <div class="tx-right">
-      <div class="tx-amount">{{ formatTZS(amount) }}</div>
-      <span class="tx-badge" :class="badgeClass">{{ statusLabel }}</span>
+    <div class="transaction-row__amount">
+      <span class="transaction-row__value">{{ formatTZS(transaction.amount) }}</span>
+      <span class="transaction-row__method">{{ formatMethod(transaction.paymentMethod || transaction.payment_method) }}</span>
+    </div>
+    <div class="transaction-row__status">
+      <span class="status-badge" :class="`status-badge--${getStatusClass(transaction.status)}`">
+        {{ formatStatus(transaction.status) }}
+      </span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { defineProps, computed } from 'vue'
 
 const props = defineProps({
-  payerName:     { type: String, default: null },
-  controlNumber: { type: String, required: true },
-  amount:        { type: Number, required: true },
-  status:        { type: String, default: 'paid' }, // paid | partial | unmatched
-  paidAt:        { type: String, required: true },
+  transaction: {
+    type: Object,
+    required: true
+  }
 })
 
-const initials = computed(() => {
-  if (!props.payerName) return '??'
-  return props.payerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-})
-
-const controlSuffix = computed(() => props.controlNumber.slice(-4))
-
-const formattedDate = computed(() =>
-  new Date(props.paidAt).toLocaleString('en-TZ', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+function formatTZS(amount) {
+  if (!amount) return 'TZS 0.00'
+  return 'TZS ' + amount.toLocaleString('en-TZ', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   })
-)
-
-const formatTZS = (v) =>
-  new Intl.NumberFormat('sw-TZ', { minimumFractionDigits: 0 }).format(v)
-
-const statusMap = {
-  paid:      { label: 'PAID',      badge: 'badge--paid',    avatar: 'avatar--paid' },
-  partial:   { label: 'PARTIAL',   badge: 'badge--partial', avatar: 'avatar--partial' },
-  unmatched: { label: 'UNMATCHED', badge: 'badge--danger',  avatar: 'avatar--danger' },
 }
 
-const statusLabel = computed(() => statusMap[props.status]?.label ?? props.status.toUpperCase())
-const badgeClass  = computed(() => statusMap[props.status]?.badge ?? '')
-const statusClass = computed(() => statusMap[props.status]?.avatar ?? '')
+function formatDate(dateString) {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function formatMethod(method) {
+  const methods = {
+    cash: 'Cash',
+    mobile_money: 'Mobile Money',
+    bank: 'Bank Transfer'
+  }
+  return methods[method] || method
+}
+
+function formatStatus(status) {
+  return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'
+}
+
+function getStatusClass(status) {
+  const statusMap = {
+    paid: 'success',
+    pending: 'warning',
+    refunded: 'info',
+    failed: 'error'
+  }
+  return statusMap[status] || 'info'
+}
 </script>
 
 <style scoped>
-.tx-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06);
+.transaction-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgb(249, 250, 251);
+  border-radius: 0.5rem;
   transition: all 0.2s;
 }
 
-.tx-row:hover {
-  background: linear-gradient(90deg, transparent 0%, rgba(76, 175, 118, 0.03) 100%);
-  padding-left: 8px;
-  padding-right: 8px;
-  border-radius: 8px;
+.transaction-row:hover {
+  background: rgb(243, 244, 246);
 }
 
-.tx-row:last-child { border-bottom: none; }
-
-.tx-avatar {
-  width: 36px; height: 36px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+.transaction-row__info {
+  flex: 1;
+  min-width: 0;
 }
 
-.avatar--paid    { background: linear-gradient(135deg, #d6f0df 0%, #b8e6d0 100%); color: #2d7a50; }
-.avatar--partial { background: linear-gradient(135deg, #fdf6e3 0%, #fef0d4 100%); color: #b88a00; }
-.avatar--danger  { background: linear-gradient(135deg, #fef0f0 0%, #fee2e2 100%); color: #c0392b; }
-
-.tx-body { flex: 1; min-width: 0; }
-
-.tx-name { 
-  font-size: 13px; font-weight: 600; color: #1a2e24;
-  letter-spacing: -0.2px;
+.transaction-row__payer {
+  font-weight: 600;
+  color: rgb(31, 41, 55);
+  margin-bottom: 0.25rem;
 }
 
-.tx-meta { font-size: 11px; color: #7a9489; font-weight: 500; }
-
-.tx-right { text-align: right; flex-shrink: 0; }
-
-.tx-amount { font-size: 15px; font-weight: 700; color: #2d7a50; letter-spacing: -0.3px; }
-
-.tx-badge {
-  display: inline-block; font-size: 10px; padding: 3px 8px;
-  border-radius: 10px; margin-top: 4px; font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+.transaction-row__meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: rgb(107, 114, 128);
 }
 
-.badge--paid    { background: linear-gradient(135deg, #f0faf3 0%, #e8f5e9 100%); color: #2d7a50; border: 1px solid #a8ddb8; }
-.badge--partial { background: linear-gradient(135deg, #fdf6e3 0%, #fef0d4 100%); color: #b88a00; border: 1px solid #f5c842; }
-.badge--danger  { background: linear-gradient(135deg, #fef0f0 0%, #fee2e2 100%); color: #c0392b; border: 1px solid #fca5a5; }
+.transaction-row__amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 0 1rem;
+}
+
+.transaction-row__value {
+  font-weight: 700;
+  color: rgb(31, 41, 55);
+  font-size: 1rem;
+}
+
+.transaction-row__method {
+  font-size: 0.75rem;
+  color: rgb(107, 114, 128);
+  margin-top: 0.125rem;
+}
+
+.transaction-row__status {
+  flex-shrink: 0;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-badge--success {
+  background: rgb(240, 253, 244);
+  color: rgb(22, 163, 74);
+}
+
+.status-badge--warning {
+  background: rgb(254, 252, 232);
+  color: rgb(180, 83, 9);
+}
+
+.status-badge--info {
+  background: rgb(239, 246, 255);
+  color: rgb(29, 78, 216);
+}
+
+.status-badge--error {
+  background: rgb(254, 242, 242);
+  color: rgb(220, 38, 38);
+}
+
+@media (max-width: 640px) {
+  .transaction-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .transaction-row__amount {
+    align-items: flex-start;
+    margin: 0;
+  }
+  
+  .transaction-row__status {
+    align-self: flex-end;
+  }
+}
 </style>

@@ -1,0 +1,1 @@
+/usr/lib/postgresql/16/bin/postgres "-D" "/home/andrew/PhProjects/waste-collection-portal/storage/postgres/data"

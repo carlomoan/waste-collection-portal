@@ -1,94 +1,175 @@
 <template>
-  <div class="collector-row">
-    <div class="avatar" :style="{ background: avatarBg, color: avatarColor }">
-      {{ initials }}
+  <div class="collector-progress-row">
+    <div class="collector-progress-row__info">
+      <div class="collector-progress-row__name">{{ collector.name }}</div>
+      <div class="collector-progress-row__zone">{{ collector.zone }}</div>
     </div>
-    <div class="info">
-      <div class="info-top">
-        <span class="name">{{ name }}</span>
-        <span class="amount" :style="{ color: amountColor }">
-          {{ formatTZS(collected) }}
-        </span>
-      </div>
+    <div class="collector-progress-row__progress">
       <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: percent + '%', background: barColor }" />
+        <div 
+          class="progress-fill" 
+          :style="{ width: progressPercent + '%' }"
+          :class="progressColor"
+        ></div>
       </div>
-      <div class="meta">{{ transactions }} transactions · {{ zone }}</div>
+      <div class="progress-labels">
+        <span class="progress-label">{{ formatTZS(collector.collected) }}</span>
+        <span class="progress-label">{{ formatTZS(collector.target) }} target</span>
+      </div>
+    </div>
+    <div class="collector-progress-row__stats">
+      <span class="stat-item">
+        <span class="stat-value">{{ collector.transactions }}</span>
+        <span class="stat-label">txns</span>
+      </span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { defineProps, computed } from 'vue'
 
 const props = defineProps({
-  name:         { type: String, required: true },
-  collected:    { type: Number, required: true },
-  target:       { type: Number, default: 1200000 },
-  transactions: { type: Number, default: 0 },
-  zone:         { type: String, default: '' },
+  collector: {
+    type: Object,
+    required: true
+  }
 })
 
-const percent    = computed(() => Math.min(100, Math.round(props.collected / props.target * 100)))
-const barColor   = computed(() => percent.value >= 80 ? '#4caf76' : percent.value >= 50 ? '#f5c842' : '#c0392b')
-const amountColor = computed(() => percent.value >= 80 ? '#2d7a50' : percent.value >= 50 ? '#b88a00' : '#c0392b')
-const avatarBg   = computed(() => percent.value >= 80 ? '#d6f0df' : percent.value >= 50 ? '#fdf6e3' : '#fef0f0')
-const avatarColor = computed(() => percent.value >= 80 ? '#1a4d32' : percent.value >= 50 ? '#b88a00' : '#c0392b')
+const progressPercent = computed(() => {
+  if (!props.collector.target || props.collector.target === 0) return 0
+  return Math.min((props.collector.collected / props.collector.target) * 100, 100)
+})
 
-const initials = computed(() =>
-  props.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-)
+const progressColor = computed(() => {
+  const p = progressPercent.value
+  if (p >= 90) return 'progress-fill--success'
+  if (p >= 75) return 'progress-fill--warning'
+  if (p >= 50) return 'progress-fill--info'
+  return 'progress-fill--danger'
+})
 
-const formatTZS = (v) =>
-  new Intl.NumberFormat('sw-TZ', { style: 'currency', currency: 'TZS', minimumFractionDigits: 0 }).format(v)
+function formatTZS(amount) {
+  if (!amount) return 'TZS 0'
+  return 'TZS ' + amount.toLocaleString('en-TZ')
+}
 </script>
 
 <style scoped>
-.collector-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06);
+.collector-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgb(249, 250, 251);
+  border-radius: 0.5rem;
   transition: all 0.2s;
 }
 
-.collector-row:hover {
-  background: linear-gradient(90deg, transparent 0%, rgba(76, 175, 118, 0.03) 100%);
-  padding-left: 8px;
-  padding-right: 8px;
-  border-radius: 8px;
+.collector-progress-row:hover {
+  background: rgb(243, 244, 246);
 }
 
-.collector-row:last-child { border-bottom: none; }
-
-.avatar {
-  width: 38px; height: 38px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+.collector-progress-row__info {
+  flex: 1;
+  min-width: 0;
 }
 
-.info { flex: 1; min-width: 0; }
-
-.info-top {
-  display: flex; justify-content: space-between;
-  margin-bottom: 6px;
+.collector-progress-row__name {
+  font-weight: 600;
+  color: rgb(31, 41, 55);
+  margin-bottom: 0.125rem;
 }
 
-.name { font-size: 13px; font-weight: 600; color: #1a2e24; letter-spacing: -0.2px; }
+.collector-progress-row__zone {
+  font-size: 0.75rem;
+  color: rgb(107, 114, 128);
+}
 
-.amount { font-size: 13px; font-weight: 700; letter-spacing: -0.3px; }
+.collector-progress-row__progress {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 
 .progress-bar {
-  height: 6px; background: linear-gradient(90deg, #f0faf3 0%, #e8f5e9 100%);
-  border-radius: 4px; overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+  height: 0.5rem;
+  background: rgb(229, 231, 235);
+  border-radius: 0.25rem;
+  overflow: hidden;
 }
 
-.progress-fill { 
-  height: 100%; 
-  border-radius: 4px; 
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+.progress-fill {
+  height: 100%;
+  border-radius: 0.25rem;
+  transition: width 1s ease, background-color 0.3s;
 }
 
-.meta { font-size: 11px; color: #7a9489; margin-top: 4px; font-weight: 500; }
+.progress-fill--success {
+  background: rgb(34, 197, 94);
+}
+
+.progress-fill--warning {
+  background: rgb(251, 146, 60);
+}
+
+.progress-fill--info {
+  background: rgb(59, 130, 246);
+}
+
+.progress-fill--danger {
+  background: rgb(239, 68, 68);
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: rgb(107, 114, 128);
+}
+
+.collector-progress-row__stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 80px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.stat-value {
+  font-weight: 700;
+  color: rgb(31, 41, 55);
+  font-size: 1rem;
+}
+
+.stat-label {
+  font-size: 0.625rem;
+  color: rgb(107, 114, 128);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 640px) {
+  .collector-progress-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .collector-progress-row__progress {
+    width: 100%;
+  }
+  
+  .collector-progress-row__stats {
+    align-items: flex-start;
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
 </style>

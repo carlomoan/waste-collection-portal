@@ -1,177 +1,137 @@
 <template>
-  <Transition name="modal">
-    <div v-if="show" class="modal-overlay" @click="$emit('close')">
-      <div class="modal-container" @click.stop>
-        <div class="modal-header">
-          <h3>{{ title }}</h3>
-          <button class="modal-close" @click="$emit('close')">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="20" height="20">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <slot></slot>
-        </div>
-        <div class="modal-footer" v-if="$slots.footer">
-          <slot name="footer"></slot>
-        </div>
+  <div class="modal-overlay" v-if="show" @click.self="close">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal__header">
+        <h2 id="modal-title" class="modal__title">{{ title }}</h2>
+        <button class="modal__close" @click="close" aria-label="Close modal">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal__body">
+        <slot />
+      </div>
+      <div class="modal__footer" v-if="$slots.footer">
+        <slot name="footer" />
       </div>
     </div>
-  </Transition>
+  </div>
 </template>
 
 <script setup>
-defineProps({
+import { defineProps, defineEmits } from 'vue'
+
+const props = defineProps({
   show: {
     type: Boolean,
-    required: true
+    default: false
   },
   title: {
     type: String,
-    default: 'Modal'
+    default: ''
   }
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close'])
+
+function close() {
+  emit('close')
+}
 </script>
 
 <style scoped>
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1rem;
   z-index: 1000;
-  padding: 20px;
+  animation: fadeIn 0.2s ease;
 }
 
-.modal-container {
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  max-width: 520px;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 32rem;
   width: 100%;
   max-height: 90vh;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: slideUp 0.2s ease;
 }
 
-@keyframes modalSlideIn {
+@keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(-20px) scale(0.95);
+    transform: translateY(1rem);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
-.modal-header {
+.modal__header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fafafa;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgb(229, 231, 235);
 }
 
-.modal-header h3 {
+.modal__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: rgb(31, 41, 55);
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a2e24;
-  letter-spacing: -0.3px;
 }
 
-.modal-close {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
-  color: #7a9489;
-  transition: all 0.2s;
+.modal__close {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.modal-close:hover {
-  background: rgba(220, 38, 38, 0.08);
-  color: #dc2626;
-  transform: rotate(90deg);
-}
-
-.modal-body {
-  padding: 24px;
-  overflow-y: auto;
-  max-height: calc(90vh - 140px);
-}
-
-.modal-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.modal-body::-webkit-scrollbar-track {
+  width: 2rem;
+  height: 2rem;
+  border: none;
   background: transparent;
+  border-radius: 0.375rem;
+  color: rgb(107, 114, 128);
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.modal-body::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
+.modal__close:hover {
+  background: rgb(243, 244, 246);
+  color: rgb(31, 41, 55);
 }
 
-.modal-body::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+.modal__close svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
-.modal-footer {
+.modal__body {
+  padding: 1.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.modal__footer {
   display: flex;
-  gap: 12px;
   justify-content: flex-end;
-  padding: 16px 24px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fafafa;
-}
-
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 640px) {
-  .modal-overlay {
-    padding: 12px;
-  }
-  
-  .modal-container {
-    max-height: 95vh;
-  }
-  
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-  
-  .modal-header h3 {
-    font-size: 16px;
-  }
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgb(229, 231, 235);
+  background: rgb(249, 250, 251);
+  border-radius: 0 0 0.75rem 0.75rem;
 }
 </style>

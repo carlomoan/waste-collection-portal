@@ -10,10 +10,9 @@ class BankDeposit extends Model
     protected $fillable = [
         'deposit_reference',
         'staff_id',
+        'bank_account_id',
         'deposit_date',
         'amount',
-        'bank_name',
-        'account_number',
         'slip_number',
         'slip_file',
         'status',
@@ -27,6 +26,11 @@ class BankDeposit extends Model
     public function staff(): BelongsTo
     {
         return $this->belongsTo(Staff::class);
+    }
+
+    public function bankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 
     public function isConfirmed(): bool

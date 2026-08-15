@@ -128,13 +128,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Staff Management
+    Route::resource('staff', StaffController::class)->except(['create', 'edit']);
     Route::prefix('staff')->name('staff.')->group(function () {
         Route::get('/export', [StaffController::class, 'export'])->name('export');
-    });
-    Route::resource('staff', StaffController::class)->except(['create', 'edit']);
-    Route::patch('/staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
-    Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
-    Route::prefix('staff')->name('staff.')->group(function () {
         Route::post('/{staff}/documents', [StaffController::class, 'uploadDocument'])->name('upload-document');
         Route::post('/{staff}/emergency-contact', [StaffController::class, 'addEmergencyContact'])->name('add-emergency-contact');
         Route::post('/{staff}/rate', [StaffController::class, 'ratePerformance'])->name('rate');
@@ -149,11 +145,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/export', [ExpenseController::class, 'export'])->name('export');
         Route::get('/analytics', [ExpenseController::class, 'analytics'])->name('analytics');
         Route::post('/categories', [ExpenseController::class, 'storeCategory'])->name('categories.store');
-    });
-    Route::resource('expenses', ExpenseController::class)->except(['create', 'edit']);
-    Route::prefix('expenses')->name('expenses.')->group(function () {
         Route::patch('/{expense}/approve', [ExpenseController::class, 'approve'])->name('approve');
         Route::patch('/{expense}/reject', [ExpenseController::class, 'reject'])->name('reject');
+        Route::get('/', [ExpenseController::class, 'index'])->name('index');
     });
 
     // Banking & Deposits
@@ -206,11 +200,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Vehicles
-    Route::prefix('vehicles')->name('vehicles.')->group(function () {
-        Route::get('/export', [VehicleController::class, 'export'])->name('export');
-    });
     Route::resource('vehicles', VehicleController::class);
     Route::prefix('vehicles')->name('vehicles.')->group(function () {
+        Route::get('/export', [VehicleController::class, 'export'])->name('export');
         Route::post('/{vehicle}/maintenance', [VehicleController::class, 'scheduleMaintenance'])->name('schedule-maintenance');
         Route::patch('/maintenance/{maintenance}/complete', [VehicleController::class, 'completeMaintenance'])->name('complete-maintenance');
         Route::post('/{vehicle}/fuel-log', [VehicleController::class, 'addFuelLog'])->name('add-fuel-log');
@@ -229,6 +221,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/test-email', [SettingsController::class, 'testEmail'])->name('test-email');
         Route::post('/clear-cache', [SettingsController::class, 'clearCache'])->name('clear-cache');
         Route::post('/backup', [SettingsController::class, 'runBackup'])->name('backup');
+        Route::get('/export-database', [SettingsController::class, 'exportDatabase'])->name('export-database');
+        Route::post('/restore-database', [SettingsController::class, 'restoreDatabase'])->name('restore-database');
     });
 
     // Collection Schedules
@@ -260,6 +254,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/export', [FinanceController::class, 'exportReport'])->name('export');
         Route::get('/budget', [FinanceController::class, 'budget'])->name('budget');
         Route::post('/budget', [FinanceController::class, 'storeBudget'])->name('store-budget');
+    });
+
+    // Settings (including database management)
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('/', [SettingsController::class, 'index'])->name('index');
+        Route::put('/', [SettingsController::class, 'update'])->name('update');
+        Route::post('/test-email', [SettingsController::class, 'testEmail'])->name('test-email');
+        Route::post('/clear-cache', [SettingsController::class, 'clearCache'])->name('clear-cache');
+        Route::post('/backup', [SettingsController::class, 'runBackup'])->name('backup');
+        Route::post('/export-database', [SettingsController::class, 'exportDatabase'])->name('export-database');
+        Route::post('/restore-database', [SettingsController::class, 'restoreDatabase'])->name('restore-database');
     });
 
     // Zones (if not already defined)
