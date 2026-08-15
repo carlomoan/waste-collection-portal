@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\BankDeposit;
 use App\Models\BankAccount;
 use App\Models\Payment;
+use App\Models\Staff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
@@ -15,14 +17,25 @@ class BankingController extends Controller
     public function index()
     {
         $accounts = BankAccount::all()->map(function ($acc) {
-            $deposits = BankDeposit::where('bank_account_id', $acc->id)->where('status', 'confirmed')->sum('amount');
+            $deposits = BankDeposit::query()
+                ->when(
+                    Schema::hasColumn('bank_deposits', 'bank_account_id'),
+                    fn ($query) => $query->where('bank_account_id', $acc->id),
+                    fn ($query) => $query
+                        ->where('bank_name', $acc->bank_name)
+                        ->where('account_number', $acc->account_number)
+                )
+                ->where('status', 'confirmed')
+                ->sum('amount');
             $acc->current_balance = $acc->opening_balance + $deposits;
+            $acc->account_name = $acc->account_holder;
+            $acc->currency = 'TZS';
             return $acc;
         });
 
         return Inertia::render('Banking/Index', [
             'bankAccounts' => $accounts->toArray(),
-            'recentDeposits' => BankDeposit::with('bankAccount')->orderBy('deposit_date', 'desc')->limit(15)->get(),
+            'recentDeposits' => $this->recentDeposits(),
             'cashPosition' => $this->getCashPosition(),
         ]);
     }
@@ -49,10 +62,17 @@ class BankingController extends Controller
             'account_number' => 'required|string|unique:bank_accounts',
             'account_name' => 'required|string',
             'opening_balance' => 'numeric|min:0',
-            'currency' => 'required|string|size:3',
+            'currency' => 'nullable|string|size:3',
         ]);
 
-        BankAccount::create($request->all());
+        BankAccount::create([
+            'bank_name' => $request->bank_name,
+            'account_number' => $request->account_number,
+            'account_holder' => $request->account_name,
+            'opening_balance' => $request->opening_balance ?? 0,
+            'balance' => $request->opening_balance ?? 0,
+            'is_active' => true,
+        ]);
         return back()->with('success', 'Bank account added.');
     }
 
@@ -68,15 +88,24 @@ class BankingController extends Controller
 
         $slipPath = $request->hasFile('slip_image') ? $request->file('slip_image')->store('banking/slips', 'public') : null;
 
-        BankDeposit::create([
-            'bank_account_id' => $request->bank_account_id,
+        $account = BankAccount::findOrFail($request->bank_account_id);
+        $depositData = [
             'amount' => $request->amount,
             'deposit_date' => $request->deposit_date,
-            'slip_image_path' => $slipPath,
+            'slip_file' => $slipPath,
             'deposit_reference' => $request->reference,
             'status' => 'pending',
-            'staff_id' => auth()->id(),
-        ]);
+            'staff_id' => Staff::where('user_id', auth()->id())->value('id') ?? Staff::value('id'),
+        ];
+
+        if (Schema::hasColumn('bank_deposits', 'bank_account_id')) {
+            $depositData['bank_account_id'] = $account->id;
+        } else {
+            $depositData['bank_name'] = $account->bank_name;
+            $depositData['account_number'] = $account->account_number;
+        }
+
+        BankDeposit::create($depositData);
 
         return back()->with('success', 'Deposit recorded, pending confirmation.');
     }
@@ -100,7 +129,14 @@ class BankingController extends Controller
         // Parse CSV or PDF and auto-match with pending deposits
         // For simplicity, we'll mark all pending deposits as confirmed if amount matches a bank transaction
         // In real app, use a job
-        $pendingDeposits = BankDeposit::where('bank_account_id', $account->id)
+        $pendingDeposits = BankDeposit::query()
+            ->when(
+                Schema::hasColumn('bank_deposits', 'bank_account_id'),
+                fn ($query) => $query->where('bank_account_id', $account->id),
+                fn ($query) => $query
+                    ->where('bank_name', $account->bank_name)
+                    ->where('account_number', $account->account_number)
+            )
             ->where('status', 'pending')
             ->get();
 
@@ -108,6 +144,17 @@ class BankingController extends Controller
             // Simulate matching logic
             $deposit->update(['status' => 'confirmed', 'confirmed_at' => now()]);
         }
+    }
+
+    private function recentDeposits()
+    {
+        $query = BankDeposit::query();
+
+        if (Schema::hasColumn('bank_deposits', 'bank_account_id')) {
+            $query->with('bankAccount');
+        }
+
+        return $query->orderBy('deposit_date', 'desc')->limit(15)->get();
     }
 
     public function reconcileManual(Request $request, BankDeposit $deposit)

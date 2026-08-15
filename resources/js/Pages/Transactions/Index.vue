@@ -3,14 +3,14 @@
 
     <!-- Top actions -->
     <div class="page-actions">
-      <button class="btn-primary" @click="showImportModal = true">
+      <Link href="/transactions/import" class="btn-primary">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"
           width="14" height="14">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21
                18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
         </svg>
         Import PDF / Excel
-      </button>
+      </Link>
       <Link href="/transactions/create" class="btn-secondary">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
           width="14" height="14">
@@ -113,9 +113,11 @@
             <td class="td-amount">{{ formatTZS(tx.amount) }}</td>
             <td class="td-collector">{{ tx.staff?.user?.name ?? '—' }}</td>
             <td class="td-mono small">{{ tx.receipt_number ?? '—' }}</td>
-            <span class="status-badge" :class="`status--${tx.status}`">
-              {{ tx.status === 'pending' ? 'UNPAID' : tx.status?.toUpperCase() }}
-            </span>
+            <td>
+              <span class="status-badge" :class="`status--${tx.status}`">
+                {{ tx.status === 'pending' ? 'UNPAID' : tx.status?.toUpperCase() }}
+              </span>
+            </td>
             <td class="td-date">{{ formatDate(tx.paid_at) }}</td>
             <td class="td-actions">
               <button class="action-link" @click="openViewModal(tx)">View</button>
@@ -128,7 +130,7 @@
           <tr v-if="!payments.data?.length">
             <td colspan="9" class="empty-row">
               No transactions found.
-              <button @click="showImportModal = true" class="import-link">Import from PDF →</button>
+              <Link href="/transactions/import" class="import-link">Import from PDF →</Link>
             </td>
           </tr>
         </tbody>

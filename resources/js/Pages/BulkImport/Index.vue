@@ -56,6 +56,14 @@
               <label>Import Date</label>
               <input type="date" v-model="importDate" class="form-input" required>
             </div>
+            <div class="form-group">
+              <label>Default Zone</label>
+              <select v-model="zoneId" class="form-input">
+                <option value="">Use zone_id from file</option>
+                <option v-for="zone in zones" :key="zone.id" :value="zone.id">{{ zone.name }}</option>
+              </select>
+              <small class="form-hint">Used when client/staff rows do not include zone_id.</small>
+            </div>
           </div>
           <div class="form-group">
             <label>Upload File</label>
@@ -243,11 +251,16 @@ const props = defineProps({
   stats: {
     type: Object,
     default: () => ({ total_imports: 0, records_imported: 0, success_rate: 0, last_import: 0 })
+  },
+  zones: {
+    type: Array,
+    default: () => []
   }
 })
 
 const entityType = ref('clients')
 const importDate = ref(new Date().toISOString().split('T')[0])
+const zoneId = ref('')
 const selectedFile = ref(null)
 const isDragging = ref(false)
 const isSubmitting = ref(false)
@@ -294,6 +307,7 @@ const previewImport = async () => {
   const formData = new FormData()
   formData.append('file', selectedFile.value)
   formData.append('entity_type', entityType.value)
+  if (zoneId.value) formData.append('zone_id', zoneId.value)
 
   try {
     const response = await fetch(route('bulk-import.preview'), {
@@ -337,6 +351,7 @@ const submitImport = () => {
     file: selectedFile.value,
     entity_type: entityType.value,
     import_date: importDate.value,
+    zone_id: zoneId.value || null,
   }).post(route('bulk-import.store'), {
     forceFormData: true,
     onSuccess: () => {
@@ -421,6 +436,13 @@ const rollbackImport = (bulkImport) => {
 .header p {
   color: #4a6357;
   font-size: 14px;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 4px;
+  color: #7a9489;
+  font-size: 11px;
 }
 
 .summary-grid {

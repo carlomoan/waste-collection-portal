@@ -9,6 +9,7 @@ use App\Models\Client;
 use App\Models\CollectionSession;
 use App\Models\Payment;
 use App\Models\Staff;
+use App\Models\Zone;
 use App\Services\TausiPosImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -246,7 +247,9 @@ class TransactionController extends Controller
      */
     public function importPage()
     {
-        return Inertia::render('Transactions/Import');
+        return Inertia::render('Transactions/Import', [
+            'zones' => Zone::orderBy('name')->get(['id', 'name']),
+        ]);
     }
 
     /**
@@ -259,8 +262,9 @@ class TransactionController extends Controller
                 'required',
                 'file',
                 'max:10240',
-                'mimetypes:application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv',
+                'mimetypes:application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,application/csv,text/comma-separated-values',
             ],
+            'zone_id' => ['nullable', 'exists:zones,id'],
         ]);
 
         $file = $request->file('file');
@@ -277,7 +281,7 @@ class TransactionController extends Controller
                     ->text();
 
                 $result = app(TausiPosImportService::class)->previewFromText($text);
-                session(['import_temp_path' => $path, 'import_mime' => $mime]);
+                session(['import_temp_path' => $path, 'import_mime' => $mime, 'import_zone_id' => $request->integer('zone_id') ?: null]);
 
                 return response()->json($result);
             } catch (\Exception $e) {
@@ -292,7 +296,7 @@ class TransactionController extends Controller
         // For Excel/CSV files
         try {
             $result = app(TausiPosImportService::class)->preview($fullPath, $mime);
-            session(['import_temp_path' => $path, 'import_mime' => $mime]);
+            session(['import_temp_path' => $path, 'import_mime' => $mime, 'import_zone_id' => $request->integer('zone_id') ?: null]);
             return response()->json($result);
         } catch (\Exception $e) {
             Storage::disk('local')->delete($path);
@@ -310,6 +314,7 @@ class TransactionController extends Controller
     {
         $path = session('import_temp_path');
         $mime = session('import_mime');
+        $zoneId = session('import_zone_id');
 
         if (!$path || !Storage::disk('local')->exists($path)) {
             return response()->json([
@@ -327,19 +332,19 @@ class TransactionController extends Controller
                     ->addOptions(['-layout'])
                     ->text();
 
-                $result = app(TausiPosImportService::class)->importFromText($text);
+                $result = app(TausiPosImportService::class)->importFromText($text, $zoneId);
             } else {
-                $result = app(TausiPosImportService::class)->import($fullPath, $mime);
+                $result = app(TausiPosImportService::class)->import($fullPath, $mime, $zoneId);
             }
 
             session(['last_imported_ids' => $result['imported_ids'] ?? []]);
             Storage::disk('local')->delete($path);
-            session()->forget(['import_temp_path', 'import_mime']);
+            session()->forget(['import_temp_path', 'import_mime', 'import_zone_id']);
 
             return response()->json($result);
         } catch (\Exception $e) {
             Storage::disk('local')->delete($path);
-            session()->forget(['import_temp_path', 'import_mime']);
+            session()->forget(['import_temp_path', 'import_mime', 'import_zone_id']);
             return response()->json([
                 'success' => false,
                 'message' => 'Import failed: ' . $e->getMessage(),

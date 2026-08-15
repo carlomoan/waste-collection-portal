@@ -6,7 +6,10 @@ use App\Imports\GenericSheetImport;
 use App\Models\BulkImport;
 use App\Models\Client;
 use App\Models\Payment;
+use App\Models\Role;
 use App\Models\Staff;
+use App\Models\User;
+use App\Models\Zone;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -35,13 +38,14 @@ class BulkImportProcessor
      *
      * @return array{columns: array<int, string>, rows: array<int, array<string, mixed>>, valid: int, invalid: int, errors: array<int, array{row: int, message: string}>}
      */
-    public function preview(string $absolutePath, string $entityType, int $sampleSize = 20): array
+    public function preview(string $absolutePath, string $entityType, int $sampleSize = 20, ?int $defaultZoneId = null): array
     {
         $rows = $this->readRows($absolutePath);
         $errors = [];
         $valid = 0;
 
         foreach ($rows as $index => $row) {
+            $row = $this->applyImportDefaults($entityType, $row, $defaultZoneId);
             $validator = $this->validatorFor($entityType, $row);
             if ($validator->fails()) {
                 $errors[] = ['row' => $index + 2, 'message' => $validator->errors()->first()];
@@ -64,7 +68,7 @@ class BulkImportProcessor
      * single database transaction (chunked); invalid rows are skipped and
      * recorded in the import's error log.
      */
-    public function process(BulkImport $import, string $absolutePath, ?string $importDate = null): void
+    public function process(BulkImport $import, string $absolutePath, ?string $importDate = null, ?int $defaultZoneId = null): void
     {
         $entityType = $import->entity_type;
         $rows = $this->readRows($absolutePath);
@@ -76,6 +80,7 @@ class BulkImportProcessor
         DB::transaction(function () use ($rows, $entityType, $importDate, &$importedIds, &$errors, &$successCount) {
             foreach ($rows->chunk(self::CHUNK_SIZE) as $chunk) {
                 foreach ($chunk as $index => $row) {
+                    $row = $this->applyImportDefaults($entityType, $row, $defaultZoneId);
                     $validator = $this->validatorFor($entityType, $row);
 
                     if ($validator->fails()) {
@@ -145,7 +150,7 @@ class BulkImportProcessor
             'staff' => [
                 'phone' => 'required|string|max:50',
                 'role' => 'required|string|max:50',
-                'name' => 'nullable|string|max:255',
+                'name' => 'required_without:user_id|nullable|string|max:255',
                 'user_id' => 'nullable|integer',
                 'national_id' => 'nullable|string',
                 'zone_id' => 'nullable|integer',
@@ -168,6 +173,15 @@ class BulkImportProcessor
         return Validator::make($row, $rules);
     }
 
+    private function applyImportDefaults(string $entityType, array $row, ?int $defaultZoneId): array
+    {
+        if (in_array($entityType, ['clients', 'staff'], true) && empty($row['zone_id']) && $defaultZoneId) {
+            $row['zone_id'] = $defaultZoneId;
+        }
+
+        return $row;
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -177,10 +191,7 @@ class BulkImportProcessor
             'clients' => Client::create(array_merge([
                 'status' => 'active',
             ], $data)),
-            'staff' => Staff::create(array_merge([
-                'is_active' => true,
-                'hire_date' => $importDate ?? now()->toDateString(),
-            ], $data)),
+            'staff' => $this->createStaffRecord($data, $importDate),
             'payments' => Payment::create(array_merge([
                 'status' => 'paid',
                 'payment_method' => 'cash',
@@ -188,5 +199,40 @@ class BulkImportProcessor
             ], $data)),
             default => throw new \InvalidArgumentException("Unsupported entity type: {$entityType}"),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function createStaffRecord(array $data, ?string $importDate): Staff
+    {
+        if (empty($data['user_id'])) {
+            $name = trim((string) ($data['name'] ?? 'Imported Staff'));
+            $email = str($name)->slug()->append('@import.wcp')->toString();
+
+            $user = User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => $name,
+                    'phone' => $data['phone'] ?? null,
+                    'password' => bcrypt(str()->random(16)),
+                    'is_active' => true,
+                ]
+            );
+
+            $role = Role::where('name', $data['role'])->first();
+            if ($role) {
+                $user->roles()->syncWithoutDetaching([$role->id]);
+            }
+
+            $data['user_id'] = $user->id;
+        }
+
+        unset($data['name']);
+
+        return Staff::create(array_merge([
+            'is_active' => true,
+            'hire_date' => $importDate ?? now()->toDateString(),
+        ], $data));
     }
 }

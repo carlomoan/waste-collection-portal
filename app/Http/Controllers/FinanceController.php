@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class FinanceController extends Controller
@@ -38,7 +39,11 @@ class FinanceController extends Controller
             ->latest('expense_date')
             ->get();
 
-        $deposits = BankDeposit::with('bankAccount')
+        $depositQuery = BankDeposit::query();
+        if (Schema::hasColumn('bank_deposits', 'bank_account_id')) {
+            $depositQuery->with('bankAccount');
+        }
+        $deposits = $depositQuery
             ->whereMonth('deposit_date', $month)
             ->whereYear('deposit_date', $year)
             ->latest('deposit_date')

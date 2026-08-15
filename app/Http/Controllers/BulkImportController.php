@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ProcessBulkImport;
 use App\Models\BulkImport;
+use App\Models\Zone;
 use App\Services\BulkImportProcessor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,7 @@ class BulkImportController extends Controller
             'imports' => $imports,
             'recentImports' => $recentImports,
             'entityTypes' => self::ENTITY_TYPES,
+            'zones' => Zone::orderBy('name')->get(['id', 'name']),
             'stats' => [
                 'total_imports' => (clone $thisMonth)->count(),
                 'records_imported' => (clone $thisMonth)->sum('records_imported'),
@@ -52,6 +54,7 @@ class BulkImportController extends Controller
         $validated = $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
             'entity_type' => 'required|in:'.implode(',', self::ENTITY_TYPES),
+            'zone_id' => 'nullable|exists:zones,id',
         ]);
 
         // Store to disk first so the file keeps its extension; PhpSpreadsheet
@@ -61,7 +64,7 @@ class BulkImportController extends Controller
         $absolutePath = Storage::disk('local')->path($path);
 
         try {
-            $preview = $processor->preview($absolutePath, $validated['entity_type']);
+            $preview = $processor->preview($absolutePath, $validated['entity_type'], 20, $validated['zone_id'] ?? null);
         } catch (\Throwable $e) {
             return response()->json(['message' => 'Could not read file: '.$e->getMessage()], 422);
         } finally {
@@ -77,6 +80,7 @@ class BulkImportController extends Controller
             'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
             'entity_type' => 'required|in:'.implode(',', self::ENTITY_TYPES),
             'import_date' => 'nullable|date',
+            'zone_id' => 'nullable|exists:zones,id',
         ]);
 
         $file = $request->file('file');
@@ -91,7 +95,7 @@ class BulkImportController extends Controller
             'imported_at' => now(),
         ]);
 
-        ProcessBulkImport::dispatch($bulkImport, $validated['import_date'] ?? null);
+        ProcessBulkImport::dispatch($bulkImport, $validated['import_date'] ?? null, $validated['zone_id'] ?? null);
 
         return back()->with('success', 'Import started. Refresh to see the result once processing completes.');
     }

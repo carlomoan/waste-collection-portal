@@ -29,6 +29,14 @@
         all transactions, detect new clients, and let you review before importing.
       </p>
 
+      <div class="form-row import-zone-row">
+        <label class="form-label" for="zone_id">Default zone for new clients and collectors</label>
+        <select id="zone_id" v-model="zoneId" class="form-input">
+          <option value="">Use system default zone</option>
+          <option v-for="zone in zones" :key="zone.id" :value="zone.id">{{ zone.name }}</option>
+        </select>
+      </div>
+
       <div
         class="drop-zone"
         :class="{ 'drop-zone--over': isDragging, 'drop-zone--selected': selectedFile }"
@@ -326,6 +334,11 @@ const parseError = ref(null)
 const preview = ref({})
 const results = ref({})
 const rowFilter = ref('all')
+const props = defineProps({
+  zones: { type: Array, default: () => [] },
+})
+const zones = computed(() => props.zones || [])
+const zoneId = ref('')
 
 const rowFilters = [
   { key: 'all', label: 'All' },
@@ -385,9 +398,10 @@ async function parseFile() {
 
   const formData = new FormData()
   formData.append('file', selectedFile.value)
+  if (zoneId.value) formData.append('zone_id', zoneId.value)
 
   try {
-    const { data } = await axios.post('/transactions/preview', formData, {
+    const { data } = await axios.post('/transactions/import/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
 
@@ -410,7 +424,7 @@ async function parseFile() {
 async function runImport() {
   importing.value = true
   try {
-    const { data } = await axios.post('/transactions/confirm-import', {}, {
+    const { data } = await axios.post('/transactions/import/confirm', {}, {
       timeout: 120000 // 2-minute timeout for large files
     })
 
@@ -480,6 +494,17 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-TZ', { month: 'sh
 .card-title { font-size: 15px; font-weight: 600; color: #1a2e24; margin-bottom: 6px; }
 .card-sub { font-size: 12px; color: #7a9489; margin-bottom: 20px; line-height: 1.6; }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.form-row { margin-bottom: 16px; }
+.form-label { display: block; font-size: 11px; font-weight: 600; color: #4a6357; margin-bottom: 6px; }
+.form-input {
+  width: 100%; max-width: 360px; padding: 9px 12px;
+  border: 1px solid rgba(0,0,0,0.12); border-radius: 8px;
+  font-size: 12px; color: #1a2e24; background: #fff;
+}
+.import-zone-row {
+  background: #f8faf9; border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 8px; padding: 12px 14px;
+}
 
 /* Drop zone */
 .drop-zone {

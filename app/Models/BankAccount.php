@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class BankAccount extends Model
 {
@@ -29,7 +30,16 @@ class BankAccount extends Model
 
     public function getCurrentBalanceAttribute()
     {
-        $deposits = BankDeposit::where('bank_account_id', $this->id)->where('status', 'confirmed')->sum('amount');
+        $deposits = BankDeposit::query()
+            ->when(
+                Schema::hasColumn('bank_deposits', 'bank_account_id'),
+                fn ($query) => $query->where('bank_account_id', $this->id),
+                fn ($query) => $query
+                    ->where('bank_name', $this->bank_name)
+                    ->where('account_number', $this->account_number)
+            )
+            ->where('status', 'confirmed')
+            ->sum('amount');
         return $this->opening_balance + $deposits;
     }
 }

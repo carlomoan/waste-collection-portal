@@ -11,6 +11,8 @@ class BankDeposit extends Model
         'deposit_reference',
         'staff_id',
         'bank_account_id',
+        'bank_name',
+        'account_number',
         'deposit_date',
         'amount',
         'slip_number',

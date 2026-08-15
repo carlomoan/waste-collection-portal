@@ -7,6 +7,7 @@ use App\Models\ClientType;
 use App\Models\CollectionSession;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Role;
 use App\Models\Staff;
 use App\Models\User;
 use App\Models\Zone;
@@ -20,6 +21,7 @@ class TausiPosImportService
     private array $errors = [];
     private array $warnings = [];
     private array $stats = [];
+    private ?int $importZoneId = null;
 
     // =========================================================================
     // PUBLIC API
@@ -32,8 +34,9 @@ class TausiPosImportService
         return $this->processPreviewRows($records);
     }
 
-    public function importFromText(string $text): array
+    public function importFromText(string $text, ?int $zoneId = null): array
     {
+        $this->importZoneId = $zoneId;
         $posNumber = $this->extractPosNumber($text);
         $records = $this->parsePdfText($text, $posNumber);
         return $this->processImport($records);
@@ -45,8 +48,9 @@ class TausiPosImportService
         return $this->processPreviewRows($rows);
     }
 
-    public function import(string $filePath, string $mimeType): array
+    public function import(string $filePath, string $mimeType, ?int $zoneId = null): array
     {
+        $this->importZoneId = $zoneId;
         $rows = $this->extractRows($filePath, $mimeType);
         return $this->processImport($rows);
     }
@@ -727,9 +731,6 @@ class TausiPosImportService
         $staff = Staff::whereHas('user', fn($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($name) . '%']))->first();
         if ($staff) return $staff;
 
-        $staff = Staff::where('role', 'collector')->first();
-        if ($staff) return $staff;
-
         return $this->createDefaultStaff($name);
     }
 
@@ -738,22 +739,36 @@ class TausiPosImportService
         $email = Str::slug($name) . '@import.wcp';
         $user = User::firstOrCreate(
             ['email' => $email],
-            ['name' => ucwords(strtolower($name)), 'password' => bcrypt(Str::random(16))]
+            [
+                'name' => ucwords(strtolower($name)),
+                'password' => bcrypt(Str::random(16)),
+                'is_active' => false,
+            ]
         );
+        if ($user->wasRecentlyCreated) {
+            $role = Role::where('name', 'collector')->first();
+            if ($role) {
+                $user->roles()->syncWithoutDetaching([$role->id]);
+            }
+        }
         return Staff::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'staff_number' => 'WCP-STF-' . str_pad(Staff::count() + 1, 3, '0', STR_PAD_LEFT),
                 'phone'        => '000',
+                'zone_id'      => $this->getDefaultZoneId(),
                 'role'         => 'collector',
                 'hire_date'    => now()->toDateString(),
                 'base_salary'  => 0,
+                'is_active'    => false,
             ]
         );
     }
 
     private function getDefaultZoneId(): int
     {
+        if ($this->importZoneId && Zone::whereKey($this->importZoneId)->exists()) {
+            return $this->importZoneId;
+        }
         $zone = Zone::first();
         if ($zone) return $zone->id;
         return Zone::create([

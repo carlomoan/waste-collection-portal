@@ -23,6 +23,7 @@ class ProcessBulkImport implements ShouldQueue
     public function __construct(
         public BulkImport $bulkImport,
         public ?string $importDate = null,
+        public ?int $zoneId = null,
     ) {}
 
     public function handle(BulkImportProcessor $processor): void
@@ -30,7 +31,7 @@ class ProcessBulkImport implements ShouldQueue
         $absolutePath = Storage::disk('local')->path($this->bulkImport->file_path);
 
         try {
-            $processor->process($this->bulkImport, $absolutePath, $this->importDate);
+            $processor->process($this->bulkImport, $absolutePath, $this->importDate, $this->zoneId);
         } catch (\Throwable $e) {
             $this->bulkImport->update([
                 'status' => 'failed',
