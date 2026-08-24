@@ -15,7 +15,15 @@
         :loading="loading"
         @select="switchPeriod"
       />
-      <span class="period-label">{{ periodLabel }}</span>
+      <div class="top-row-right">
+        <span class="period-label">{{ periodLabel }}</span>
+        <button class="export-btn" @click="exportDashboard" title="Export monthly report (CSV)">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="14" height="14">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          Export
+        </button>
+      </div>
     </div>
 
     <!-- KPI Cards -->
@@ -23,16 +31,18 @@
       <StatCard
         label="Total Collected"
         :value="formatTZS(stats.total_collected)"
-        :sub="changeLabel(stats.collected_change, 'vs previous period')"
-        :trend="stats.collected_change >= 0 ? 'up' : 'down'"
+        :trend="(stats.collected_change || 0) >= 0 ? 'up' : 'down'"
+        :trendValue="stats.collected_change"
+        sub="vs previous period"
         accent="green"
       />
       <StatCard
         label="Transactions"
         :value="(stats.total_transactions || 0).toLocaleString()"
-        :sub="changeLabel(stats.tx_change, 'vs previous period')"
-        :trend="stats.tx_change >= 0 ? 'up' : 'down'"
-        accent="green"
+        :trend="(stats.tx_change || 0) >= 0 ? 'up' : 'down'"
+        :trendValue="stats.tx_change"
+        sub="vs previous period"
+        accent="blue"
       />
       <StatCard
         label="Outstanding Debt"
@@ -43,7 +53,7 @@
       <StatCard
         label="Penalty Due"
         :value="formatTZS(stats.total_penalties)"
-        sub="This month"
+        sub="This year"
         accent="red"
       />
     </div>
@@ -105,9 +115,9 @@
           <Link href="/reports/collector" class="see-all">See all →</Link>
         </div>
         <div v-if="collectors.length" class="collector-list">
-          <CollectorProgressRow v-for="collector in collectors.slice(0, 3)" :key="collector.id" :collector="collector" />
-          <div v-if="collectors.length > 3" class="target-note">
-            <strong>{{ collectors.length }} collectors</strong> tracked this period
+          <CollectorProgressRow v-for="collector in collectors.slice(0, 5)" :key="collector.id" :collector="collector" />
+          <div v-if="collectors.length > 5" class="target-note">
+            +{{ collectors.length - 5 }} more · <strong>{{ collectors.length }}</strong> collectors tracked this period
           </div>
         </div>
         <div v-else class="empty-state">
@@ -136,7 +146,7 @@
       </div>
       <div class="bs-item">
         <span class="bs-label">Collection Rate</span>
-        <span class="bs-val" :class="rateColor">{{ stats.collection_rate }}%</span>
+        <span class="bs-val" :class="rateColor(stats.collection_rate)">{{ stats.collection_rate }}%</span>
         <div class="rate-bar">
           <div class="rate-fill" :style="{ width: Math.min(stats.collection_rate, 100) + '%' }"></div>
         </div>
@@ -271,6 +281,10 @@ function switchPeriod(period) {
   router.get('/dashboard', { period }, { preserveState: true, onFinish: () => { loading.value = false } })
 }
 
+function exportDashboard() {
+  window.location.href = '/dashboard/export-monthly'
+}
+
 function formatTZS(amount) {
   if (!amount) return 'TZS 0.00'
   return 'TZS ' + amount.toLocaleString('en-TZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -281,6 +295,9 @@ function changeLabel(change, prefix) {
   const arrow = change >= 0 ? '↑' : '↓'
   return `${prefix} ${arrow} ${Math.abs(change).toFixed(1)}%`
 }
+
+// Kept for potential reuse in custom labels
+// eslint-disable-next-line unused-imports/no-unused-vars
 
 function rateColor(rate) {
   if (rate >= 90) return 'green'
@@ -304,8 +321,16 @@ watch(() => props.period, (newPeriod) => {
 </script>
 
 <style scoped>
-.top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+.top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; gap: 1rem; flex-wrap: wrap; }
+.top-row-right { display: flex; align-items: center; gap: 1rem; }
 .period-label { font-size: 0.875rem; color: rgb(107,114,128); font-weight: 500; }
+.export-btn {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.5rem 0.875rem; background: white; border: 1px solid rgb(229,231,235);
+  border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 600; color: #2d7a50;
+  cursor: pointer; transition: all 0.15s;
+}
+.export-btn:hover { background: #f0faf3; border-color: #a8ddb8; }
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
 .charts-section { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
 .card { background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }

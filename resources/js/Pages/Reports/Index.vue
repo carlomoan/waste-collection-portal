@@ -8,104 +8,74 @@
 
       <!-- Report Type Selection -->
       <div class="report-types">
-        <div class="report-type-card" :class="{ 'report-type-card--active': selectedReportType === 'revenue' }" @click="selectedReportType = 'revenue'">
-          <div class="report-type-icon report-type-icon--revenue">
+        <div
+          v-for="(label, key) in reportTypes"
+          :key="key"
+          class="report-type-card"
+          :class="{ 'report-type-card--active': selectedReportType === key }"
+          @click="selectedReportType = key"
+        >
+          <div class="report-type-icon" :class="`report-type-icon--${iconFor(key)}`">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" :d="icons[iconFor(key)]"/>
             </svg>
           </div>
-          <div class="report-type-name">Revenue Report</div>
-          <div class="report-type-desc">Income and collections analysis</div>
-        </div>
-        <div class="report-type-card" :class="{ 'report-type-card--active': selectedReportType === 'collection' }" @click="selectedReportType = 'collection'">
-          <div class="report-type-icon report-type-icon--collection">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/>
-            </svg>
-          </div>
-          <div class="report-type-name">Collection Report</div>
-          <div class="report-type-desc">Waste collection statistics</div>
-        </div>
-        <div class="report-type-card" :class="{ 'report-type-card--active': selectedReportType === 'staff' }" @click="selectedReportType = 'staff'">
-          <div class="report-type-icon report-type-icon--staff">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0z"/>
-            </svg>
-          </div>
-          <div class="report-type-name">Staff Report</div>
-          <div class="report-type-desc">Performance and attendance</div>
-        </div>
-        <div class="report-type-card" :class="{ 'report-type-card--active': selectedReportType === 'financial' }" @click="selectedReportType = 'financial'">
-          <div class="report-type-icon report-type-icon--financial">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="24" height="24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 14.25l6-6m-5.5.5h.01m4.99 5h.01M19.5 9.75v10.5c0 .621-.504 1.125-1.125 1.125h-13.5A1.125 1.125 0 0 1 3.75 20.25V9.75m16.5-6a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 3.75v6m16.5-6v6m-16.5-6v6"/>
-            </svg>
-          </div>
-          <div class="report-type-name">Financial Report</div>
-          <div class="report-type-desc">Expenses and profitability</div>
+          <div class="report-type-name">{{ label }}</div>
+          <div class="report-type-desc">{{ descriptions[key] }}</div>
         </div>
       </div>
 
       <!-- Report Filters -->
       <div class="filters-section">
         <div class="filter-group">
-          <label class="filter-label">Period</label>
+          <label class="filter-label">Month</label>
           <select v-model="selectedMonth" class="filter-select">
-            <option v-for="m in months" :key="m.value" :value="m.value">{{ m.label }}</option>
+            <option v-for="m in 12" :key="m" :value="m">{{ monthName(m) }}</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Year</label>
+          <select v-model="selectedYear" class="filter-select">
+            <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
           </select>
         </div>
         <div class="filter-group">
           <label class="filter-label">Zone</label>
-          <select class="filter-select">
+          <select v-model="selectedZone" class="filter-select">
             <option value="">All Zones</option>
             <option v-for="z in zones" :key="z.id" :value="z.id">{{ z.name }}</option>
           </select>
         </div>
         <div class="filter-group">
-          <label class="filter-label">Format</label>
-          <select class="filter-select">
-            <option>PDF</option>
-            <option>Excel</option>
-            <option>CSV</option>
+          <label class="filter-label">Collector</label>
+          <select v-model="selectedStaff" class="filter-select">
+            <option value="">All Collectors</option>
+            <option v-for="s in collectors" :key="s.id" :value="s.id">{{ s.user?.name || s.name }}</option>
           </select>
         </div>
-        <button class="generate-btn" @click="generateReport">
+        <button class="generate-btn" @click="viewReport">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="16" height="16">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
           </svg>
-          Generate Report
+          View Report
         </button>
+        <button class="generate-btn generate-btn--csv" @click="exportReport('csv')">Export CSV</button>
+        <button class="generate-btn generate-btn--pdf" @click="exportReport('pdf')">Export PDF</button>
       </div>
 
-      <!-- Recent Reports -->
+      <!-- KPI Snapshot -->
       <div class="reports-section">
         <div class="section-header">
-          <h3>Recent Reports</h3>
-          <button class="view-all-btn">View All</button>
+          <h3>This Month at a Glance</h3>
         </div>
         <table class="reports-table">
-          <thead>
-            <tr>
-              <th>Report Name</th>
-              <th>Type</th>
-              <th>Period</th>
-              <th>Generated</th>
-              <th>Size</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
           <tbody>
-            <tr v-for="report in recentReports" :key="report.id">
-              <td>{{ report.name }}</td>
-              <td>{{ report.type }}</td>
-              <td>{{ report.period }}</td>
-              <td>{{ formatDate(report.generated_at) }}</td>
-              <td>{{ report.size }}</td>
-              <td>
-                <button class="table-action" @click="downloadReport(report.id)">Download</button>
-                <button class="table-action">View</button>
-              </td>
-            </tr>
+            <tr><td>Collections (sessions)</td><td>{{ formatCurrency(kpi.total_collections_mtd) }}</td></tr>
+            <tr><td>Payments received</td><td>{{ formatCurrency(kpi.total_payments_mtd) }}</td></tr>
+            <tr><td>Collection efficiency</td><td>{{ kpi.collection_efficiency }}%</td></tr>
+            <tr><td>Active collectors</td><td>{{ kpi.active_collectors }}</td></tr>
+            <tr><td>Pending invoices</td><td>{{ kpi.pending_invoices }}</td></tr>
           </tbody>
         </table>
       </div>
@@ -125,18 +95,22 @@
           <div class="scheduled-card" v-for="report in scheduledReports" :key="report.id">
             <div class="scheduled-header">
               <div class="scheduled-name">{{ report.name }}</div>
-              <div class="scheduled-badge" :class="report.status === 'active' ? 'scheduled-badge--active' : 'scheduled-badge--inactive'">
-                {{ report.status === 'active' ? 'Active' : 'Paused' }}
+              <div class="scheduled-badge" :class="report.is_active ? 'scheduled-badge--active' : 'scheduled-badge--inactive'">
+                {{ report.is_active ? 'Active' : 'Paused' }}
               </div>
             </div>
             <div class="scheduled-details">
+              <div class="scheduled-detail">
+                <span class="detail-label">Type:</span>
+                <span class="detail-value">{{ report.type_label }}</span>
+              </div>
               <div class="scheduled-detail">
                 <span class="detail-label">Frequency:</span>
                 <span class="detail-value">{{ report.frequency }}</span>
               </div>
               <div class="scheduled-detail">
-                <span class="detail-label">Next Run:</span>
-                <span class="detail-value">{{ report.next_run }}</span>
+                <span class="detail-label">Last Sent:</span>
+                <span class="detail-value">{{ report.last_sent_at || 'Never' }}</span>
               </div>
               <div class="scheduled-detail">
                 <span class="detail-label">Recipients:</span>
@@ -145,12 +119,14 @@
             </div>
             <div class="scheduled-actions">
               <button class="scheduled-action" @click="sendNow(report)">Send Now</button>
-              <button class="scheduled-action" @click="editSchedule(report)">Edit</button>
-              <button class="scheduled-action" :class="report.status === 'active' ? 'scheduled-action--danger' : ''" @click="toggleSchedule(report)">
-                {{ report.status === 'active' ? 'Disable' : 'Enable' }}
+              <button class="scheduled-action" :class="report.is_active ? 'scheduled-action--danger' : ''" @click="toggleSchedule(report)">
+                {{ report.is_active ? 'Pause' : 'Activate' }}
               </button>
             </div>
           </div>
+          <p v-if="!scheduledReports.length" style="grid-column: 1/-1; text-align: center; color: #7a9489; font-size: 13px; padding: 20px;">
+            No scheduled reports yet. Create one to receive reports automatically by email.
+          </p>
         </div>
       </div>
 
@@ -205,10 +181,7 @@
         <div class="form-group">
           <label>Report Type</label>
           <select v-model="scheduleForm.type" class="form-input" required>
-            <option value="revenue">Revenue Report</option>
-            <option value="collection">Collection Report</option>
-            <option value="staff">Staff Report</option>
-            <option value="financial">Financial Report</option>
+            <option v-for="(label, key) in reportTypes" :key="key" :value="key">{{ label }}</option>
           </select>
         </div>
         <div class="form-group">
@@ -221,15 +194,7 @@
         </div>
         <div class="form-group">
           <label>Recipients (comma-separated emails)</label>
-          <input type="text" v-model="scheduleForm.recipients" class="form-input" required />
-        </div>
-        <div class="form-group">
-          <label>Format</label>
-          <select v-model="scheduleForm.format" class="form-input" required>
-            <option value="pdf">PDF</option>
-            <option value="excel">Excel</option>
-            <option value="csv">CSV</option>
-          </select>
+          <input type="text" v-model="scheduleForm.recipients" class="form-input" required placeholder="manager@example.com, owner@example.com" />
         </div>
       </form>
       <template #footer>
@@ -249,101 +214,77 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 
 const props = defineProps({
-  clients: {
-    type: Array,
-    default: () => []
-  },
-  staff: {
-    type: Array,
-    default: () => []
-  },
-  months: {
-    type: Array,
-    default: () => []
-  },
-  zones: {
-    type: Array,
-    default: () => []
-  },
-  recentReports: {
-    type: Array,
-    default: () => []
-  },
-  scheduledReports: {
-    type: Array,
-    default: () => []
-  },
-  reportData: {
-    type: Object,
-    default: () => ({})
-  },
-  selectedReportType: {
-    type: String,
-    default: 'revenue'
-  },
-  month: {
-    type: Number,
-    default: null
-  },
-  year: {
-    type: Number,
-    default: null
-  }
+  reportTypes:      { type: Object, default: () => ({}) },
+  staff:            { type: Array,  default: () => [] },
+  months:           { type: Array,  default: () => [] },
+  zones:            { type: Array,  default: () => [] },
+  scheduledReports: { type: Array,  default: () => [] },
+  kpi:              { type: Object, default: () => ({}) },
 })
 
-const selectedReportType = ref(props.selectedReportType || 'revenue')
-const selectedMonth = ref(props.month || new Date().getMonth() + 1)
-const selectedYear = ref(props.year || new Date().getFullYear())
+const selectedReportType = ref('revenue')
+const selectedMonth = ref(new Date().getMonth() + 1)
+const selectedYear = ref(new Date().getFullYear())
+const selectedZone = ref('')
+const selectedStaff = ref('')
 const showScheduleModal = ref(false)
-const comparisonMonth1 = ref(new Date().getMonth())
-const comparisonMonth2 = ref(new Date().getMonth() - 1)
-const comparisonData = ref({
-  revenue_diff: 0,
-  revenue_percent: 0,
-  collections_diff: 0,
-  collections_percent: 0,
-  expenses_diff: 0,
-  expenses_percent: 0,
-})
+const comparisonMonth1 = ref(new Date().getMonth() + 1)
+const comparisonMonth2 = ref(new Date().getMonth() || 12)
 
-const scheduleForm = useForm({
-  name: '',
-  type: 'revenue',
-  frequency: 'monthly',
-  recipients: '',
-  format: 'pdf'
-})
+const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i)
 
-const formatDate = (date) => {
-  if (!date) return 'N/A'
-  return new Date(date).toLocaleDateString('en-TZ', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+const collectors = computed(() => props.staff.filter(s => s.role === 'collector'))
+
+const descriptions = {
+  revenue: 'Income and collections analysis',
+  collection: 'Sessions, planned vs actual',
+  staff: 'Collector performance & efficiency',
+  financial: 'P&L with expense breakdown',
+  debts: 'Outstanding balances & penalties',
+  clients: 'Client registry & payment totals',
+  banking: 'Deposits & cash position',
 }
 
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('sw-TZ', {
-    style: 'currency',
-    currency: 'TZS',
-    minimumFractionDigits: 0,
-  }).format(value)
+const icons = {
+  revenue: 'M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+  collection: 'M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12',
+  staff: 'M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z',
+  financial: 'M9 14.25l6-6m-5.5.5h.01m4.99 5h.01M19.5 9.75v10.5c0 .621-.504 1.125-1.125 1.125h-13.5A1.125 1.125 0 0 1 3.75 20.25V9.75m16.5-6a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 3.75v6m16.5-6v6m-16.5-6v6',
+  debts: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z',
+  clients: 'M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z',
+  banking: 'M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z',
 }
 
-const generateReport = () => {
-  router.post('/reports/generate', {
-    type: selectedReportType.value,
-    month: selectedMonth.value,
-    year: selectedYear.value,
-  })
+function iconFor(key) {
+  return ['debts', 'banking'].includes(key) ? key : (['collection'].includes(key) ? 'collection' : key)
 }
 
-const downloadReport = (reportId) => {
-  window.location.href = `/reports/download/${reportId}`
+function monthName(m) {
+  return new Date(2000, m - 1, 1).toLocaleString('en-US', { month: 'long' })
+}
+
+function filterParams() {
+  const params = { type: selectedReportType.value, month: selectedMonth.value, year: selectedYear.value }
+  if (selectedZone.value) params.zone_id = selectedZone.value
+  if (selectedStaff.value) params.staff_id = selectedStaff.value
+  return params
+}
+
+function viewReport() {
+  router.get('/reports/show', filterParams())
+}
+
+function exportReport(format) {
+  const params = new URLSearchParams(filterParams())
+  window.location.href = `/reports/export-${format}?${params.toString()}`
 }
 
 const submitSchedule = () => {
+  scheduleForm.recipients = scheduleForm.recipients
+    .split(',')
+    .map(e => e.trim())
+    .filter(Boolean)
+
   scheduleForm.post('/reports/schedule', {
     onSuccess: () => {
       showScheduleModal.value = false
@@ -353,40 +294,61 @@ const submitSchedule = () => {
 }
 
 const sendNow = (report) => {
-  router.post(`/reports/${report.id}/send-now`, {}, {
+  router.post(`/reports/send-now/${report.id}`, {}, {
     onSuccess: () => {
       alert('Report sent successfully')
     }
   })
 }
 
-const editSchedule = (report) => {
-  scheduleForm.name = report.name
-  scheduleForm.type = report.type
-  scheduleForm.frequency = report.frequency
-  scheduleForm.recipients = report.recipients
-  scheduleForm.format = report.format
-  showScheduleModal.value = true
-}
-
 const toggleSchedule = (report) => {
   router.patch(`/reports/${report.id}/toggle`, {}, {
-    onSuccess: () => {
-      // Refresh the page to update the list
-      router.reload()
-    }
+    onSuccess: () => router.reload(),
   })
 }
 
 const generateComparison = () => {
-  router.get('/reports/monthly-comparison', {
-    month1: comparisonMonth1.value,
-    month2: comparisonMonth2.value,
-  }, {
+  const [m1, y1] = String(comparisonMonth1.value).split('-').map(Number)
+  const [m2, y2] = String(comparisonMonth2.value).split('-').map(Number)
+
+  router.get('/reports/compare', { month: m1, year: y1 }, {
     onSuccess: (page) => {
-      comparisonData.value = page.props.comparisonData
-    }
+      const d = page.props.comparisonData || {}
+      comparisonData.value = {
+        revenue_diff: d.revenue_diff ?? 0,
+        revenue_percent: d.revenue_percent ?? 0,
+        collections_diff: d.collections_diff ?? 0,
+        collections_percent: d.collections_percent ?? 0,
+        expenses_diff: d.expenses_diff ?? 0,
+        expenses_percent: d.expenses_percent ?? 0,
+      }
+    },
+    onError: () => alert('Comparison failed'),
   })
+}
+
+const scheduleForm = useForm({
+  name: '',
+  type: 'revenue',
+  frequency: 'monthly',
+  recipients: '',
+})
+
+const comparisonData = ref({
+  revenue_diff: 0,
+  revenue_percent: 0,
+  collections_diff: 0,
+  collections_percent: 0,
+  expenses_diff: 0,
+  expenses_percent: 0,
+})
+
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('sw-TZ', {
+    style: 'currency',
+    currency: 'TZS',
+    minimumFractionDigits: 0,
+  }).format(value || 0)
 }
 </script>
 
@@ -413,7 +375,7 @@ const generateComparison = () => {
 
 .report-types {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -530,6 +492,22 @@ const generateComparison = () => {
 
 .generate-btn:hover {
   background: #2d7a50;
+}
+
+.generate-btn--csv {
+  background: #2563eb;
+}
+
+.generate-btn--csv:hover {
+  background: #1d4ed8;
+}
+
+.generate-btn--pdf {
+  background: #c0392b;
+}
+
+.generate-btn--pdf:hover {
+  background: #96281b;
 }
 
 .reports-section {

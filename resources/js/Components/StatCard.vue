@@ -14,7 +14,7 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="2"
-            d="M5 10l7-7m0 0l7 7m-7-7v18m-3-5a9 9 0 01-9-9 2 2 0 0 1 18 0z"
+            d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18"
           />
         </svg>
         <svg
@@ -28,7 +28,7 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="2"
-            d="M19 14l-7 7m0 0l-7-7m7 7V3m-3 11h6"
+            d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3"
           />
         </svg>
         <span class="stat-card__trend-text">{{ trendText }}</span>
@@ -49,12 +49,17 @@ const props = defineProps({
   value: { type: String, required: true },
   sub: { type: String, default: '' },
   trend: { type: String, default: '' }, // 'up', 'down', or ''
+  trendValue: { type: [Number, String], default: null }, // actual % change
   accent: { type: String, default: 'green' }
 })
 
 const trendText = computed(() => {
   if (!props.trend) return ''
-  return props.trend === 'up' ? '+10%' : '-5%'
+  if (props.trendValue !== null && props.trendValue !== undefined) {
+    const v = Number(props.trendValue)
+    return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
+  }
+  return props.trend === 'up' ? '↑' : '↓'
 })
 </script>
 

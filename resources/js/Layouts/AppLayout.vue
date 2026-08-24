@@ -148,9 +148,11 @@ const navGroups = [
   {
     label: 'Collections',
     items: [
+      { label: 'Collections', route: 'collections.index', icon: IconChart },
       { label: 'Transactions', route: 'transactions.index', icon: IconReceipt },
       { label: 'Invoices', route: 'invoices.index', icon: IconInvoice },
       { label: 'Clients', route: 'clients.index', icon: IconUsers },
+      { label: 'Merge & Name Fix', route: 'clients.merge-page', icon: IconUsers },
       { label: 'Debts', route: 'debts.index', icon: IconAlert },
       { label: 'Schedules', route: 'schedules.index', icon: IconCalendar }, // Fixed: plural schedules
       { label: 'Bulk Import', route: 'bulk-import.index', icon: IconUpload },

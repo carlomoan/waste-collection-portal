@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -24,11 +25,17 @@ class CollectionSchedule extends Model
         'is_active' => 'boolean',
     ];
 
+    /**
+     * @return BelongsTo<Zone, CollectionSchedule>
+     */
     public function zone(): BelongsTo
     {
         return $this->belongsTo(Zone::class);
     }
 
+    /**
+     * @return BelongsTo<Staff, CollectionSchedule>
+     */
     public function staff(): BelongsTo
     {
         return $this->belongsTo(Staff::class);
@@ -36,7 +43,7 @@ class CollectionSchedule extends Model
 
     public function isActive(): bool
     {
-        return $this->is_active 
+        return $this->is_active
             && (is_null($this->effective_to) || now()->lte($this->effective_to))
             && now()->gte($this->effective_from);
     }
@@ -46,6 +53,10 @@ class CollectionSchedule extends Model
         return in_array($dayOfWeek, $this->days_of_week ?? []);
     }
 
+    /**
+     * @param  Builder<CollectionSchedule>  $query
+     * @return Builder<CollectionSchedule>
+     */
     public function scopeThisWeek($query)
     {
         return $query->where('effective_from', '<=', now()->endOfWeek())
@@ -55,6 +66,10 @@ class CollectionSchedule extends Model
             });
     }
 
+    /**
+     * @param  Builder<CollectionSchedule>  $query
+     * @return Builder<CollectionSchedule>
+     */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

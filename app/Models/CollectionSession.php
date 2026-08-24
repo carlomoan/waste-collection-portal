@@ -29,11 +29,17 @@ class CollectionSession extends Model
         'reconciled_at' => 'datetime',
     ];
 
+    /**
+     * @return BelongsTo<Staff, CollectionSession>
+     */
     public function staff(): BelongsTo
     {
         return $this->belongsTo(Staff::class);
     }
 
+    /**
+     * @return HasMany<Payment, CollectionSession>
+     */
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);

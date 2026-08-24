@@ -98,6 +98,7 @@
             </td>
             <td class="td-actions">
               <button class="action-link" @click="openViewClient(client)">View</button>
+              <button class="action-link" @click="openProfile(client)">Profile</button>
               <button class="action-link" @click="openEditClient(client)">Edit</button>
               <button class="action-link" @click="showAddContactModal(client.id)">Contact</button>
               <button class="action-link danger-link" @click="openDeleteClient(client)">Delete</button>
@@ -310,6 +311,7 @@ const addContact = () => {
 }
 
 const openViewClient = (c) => { viewingClient.value = c; showViewModal.value = true }
+const openProfile = (c) => { router.visit(`/clients/${c.id}/profile`) }
 
 const openEditClient = (c) => {
   editingClient.value = c

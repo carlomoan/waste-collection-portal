@@ -548,6 +548,8 @@ class TausiPosImportService
                         'collection_session_id' => $session->id,
                         'staff_id'              => $staff->id,
                         'amount'                => $row['amount'],
+                        // TZS 200 = Ushuru wa Mnada Soko la Kikundi (market levy), not household waste fee
+                        'revenue_type'          => Payment::classifyRevenueType((float) $row['amount']),
                         'payer_name'            => $payerName,
                         'payment_method'        => $row['payment_method'] ?? 'cash',
                         'status'                => $dbStatus,

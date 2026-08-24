@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\CollectionSchedule;
-use App\Models\CollectionSession;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Staff;
+use App\Models\Vehicle;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -56,7 +56,7 @@ class DashboardController extends Controller
 
         // ── Chart data ──────────────────────────────────────────────────────
         $chartData = $this->buildChartData($start, $end, $period);
-        $bandData  = $this->buildBandData($start, $end);
+        $bandData = $this->buildBandData($start, $end);
 
         // ── Recent transactions ─────────────────────────────────────────────
         $recentTransactions = Payment::with(['client', 'staff.user'])
@@ -64,17 +64,18 @@ class DashboardController extends Controller
             ->latest('paid_at')
             ->limit(6)
             ->get()
-            ->map(fn($p) => [
-                'id'            => $p->id,
-                'payerName'     => $p->payer_name ?? $p->client?->name ?? 'Unknown',
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'payerName' => $p->payer_name ?? $p->client?->name ?? 'Unknown',
                 'controlNumber' => $p->control_number,
-                'amount'        => (float) $p->amount,
-                'status'        => $p->status,
-                'paidAt'        => $p->paid_at?->toDateTimeString(),
+                'amount' => (float) $p->amount,
+                'status' => $p->status,
+                'paymentMethod' => $p->payment_method,
+                'paidAt' => $p->paid_at?->toDateTimeString(),
             ]);
 
         // ── Collector performance ───────────────────────────────────────────
-        $collectors = Staff::with('user')
+        $collectors = Staff::with(['user', 'zone'])
             ->where('role', 'collector')
             ->where('is_active', true)
             ->get()
@@ -89,12 +90,12 @@ class DashboardController extends Controller
                     ->count();
 
                 return [
-                    'id'           => $staff->id,
-                    'name'         => $staff->user?->name ?? 'Unknown',
-                    'collected'    => (float) $collected,
+                    'id' => $staff->id,
+                    'name' => $staff->user?->name ?? 'Unknown',
+                    'collected' => (float) $collected,
                     'transactions' => $transactions,
-                    'zone'         => $staff->zone?->name ?? 'Unassigned',
-                    'target'       => 1200000,
+                    'zone' => $staff->zone?->name ?? 'Unassigned',
+                    'target' => 1200000,
                 ];
             })
             ->sortByDesc('collected')
@@ -107,26 +108,26 @@ class DashboardController extends Controller
         );
 
         return Inertia::render('Dashboard', [
-            'period'      => $period,
+            'period' => $period,
             'periodLabel' => $this->getPeriodLabel($period, $start, $end),
-            'stats'       => [
-                'total_collected'    => (float) $totalCollected,
+            'stats' => [
+                'total_collected' => (float) $totalCollected,
                 'total_transactions' => $totalTransactions,
-                'total_outstanding'  => (float) $totalOutstanding,
-                'total_penalties'    => (float) $totalPenalties,
-                'clients_unpaid'     => $clientsUnpaid,
-                'collection_rate'    => $collectionRate,
-                'collected_change'   => $this->percentChange($prevCollected, $totalCollected),
-                'tx_change'          => $this->percentChange($prevTransactions, $totalTransactions),
+                'total_outstanding' => (float) $totalOutstanding,
+                'total_penalties' => (float) $totalPenalties,
+                'clients_unpaid' => $clientsUnpaid,
+                'collection_rate' => $collectionRate,
+                'collected_change' => $this->percentChange($prevCollected, $totalCollected),
+                'tx_change' => $this->percentChange($prevTransactions, $totalTransactions),
             ],
-            'chartData'          => $chartData,
-            'bandData'           => $bandData,
+            'chartData' => $chartData,
+            'bandData' => $bandData,
             'recentTransactions' => $recentTransactions,
-            'collectors'         => $collectors,
-            'weekSchedule'       => $weekSchedule,
-            'totals'             => [
+            'collectors' => $collectors,
+            'weekSchedule' => $weekSchedule,
+            'totals' => [
                 'active_clients' => Client::where('status', 'active')->count(),
-                'total_clients'  => Client::count(),
+                'total_clients' => Client::count(),
                 'monthly_target' => Staff::where('role', 'collector')->count() * 1200000,
             ],
         ]);
@@ -140,29 +141,29 @@ class DashboardController extends Controller
     public function exportMonthly(Request $request)
     {
         $month = $request->get('month', now()->month);
-        $year  = $request->get('year', now()->year);
+        $year = $request->get('year', now()->year);
         $start = Carbon::create($year, $month, 1)->startOfDay();
-        $end   = Carbon::create($year, $month, 1)->endOfMonth()->endOfDay();
+        $end = Carbon::create($year, $month, 1)->endOfMonth()->endOfDay();
 
         return response()->streamDownload(function () use ($start, $end, $month, $year) {
             $handle = fopen('php://output', 'w');
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
             fputcsv($handle, ['WASTE COLLECTION PORTAL — Monthly Report']);
             fputcsv($handle, ['Period:', Carbon::create($year, $month)->format('F Y')]);
             fputcsv($handle, ['Generated:', now()->format('d M Y H:i')]);
             fputcsv($handle, []);
 
-            $total       = Payment::whereBetween('paid_at', [$start, $end])->where('status', 'paid')->sum('amount');
-            $txCount     = Payment::whereBetween('paid_at', [$start, $end])->where('status', 'paid')->count();
-            $invoiced    = Invoice::where('billing_month', $month)->where('billing_year', $year)->sum('amount_due');
+            $total = Payment::whereBetween('paid_at', [$start, $end])->where('status', 'paid')->sum('amount');
+            $txCount = Payment::whereBetween('paid_at', [$start, $end])->where('status', 'paid')->count();
+            $invoiced = Invoice::where('billing_month', $month)->where('billing_year', $year)->sum('amount_due');
             $outstanding = Invoice::where('billing_month', $month)->where('billing_year', $year)->sum('balance');
 
             fputcsv($handle, ['--- SUMMARY ---']);
             fputcsv($handle, ['Total Invoiced (TZS)', number_format($invoiced, 2)]);
             fputcsv($handle, ['Total Collected (TZS)', number_format($total, 2)]);
             fputcsv($handle, ['Outstanding (TZS)', number_format($outstanding, 2)]);
-            fputcsv($handle, ['Collection Rate', ($invoiced > 0 ? round($total / $invoiced * 100, 1) : 0) . '%']);
+            fputcsv($handle, ['Collection Rate', ($invoiced > 0 ? round($total / $invoiced * 100, 1) : 0).'%']);
             fputcsv($handle, ['Total Transactions', $txCount]);
             fputcsv($handle, []);
 
@@ -196,7 +197,7 @@ class DashboardController extends Controller
     {
         $alerts = [];
 
-        $lowFuel = \App\Models\Vehicle::where('fuel_level', '<', 20)->count();
+        $lowFuel = Vehicle::where('fuel_level', '<', 20)->count();
         if ($lowFuel) {
             $alerts[] = ['type' => 'warning', 'message' => "{$lowFuel} vehicle(s) have low fuel (<20%)."];
         }
@@ -221,35 +222,35 @@ class DashboardController extends Controller
     private function getPeriodRange(string $period): array
     {
         return match ($period) {
-            'weekly'  => [Carbon::now()->startOfWeek()->startOfDay(), Carbon::now()->endOfWeek()->endOfDay()],
-            'yearly'  => [Carbon::now()->startOfYear()->startOfDay(), Carbon::now()->endOfYear()->endOfDay()],
-            default   => [Carbon::now()->startOfMonth()->startOfDay(), Carbon::now()->endOfMonth()->endOfDay()],
+            'weekly' => [Carbon::now()->startOfWeek()->startOfDay(), Carbon::now()->endOfWeek()->endOfDay()],
+            'yearly' => [Carbon::now()->startOfYear()->startOfDay(), Carbon::now()->endOfYear()->endOfDay()],
+            default => [Carbon::now()->startOfMonth()->startOfDay(), Carbon::now()->endOfMonth()->endOfDay()],
         };
     }
 
     private function getPreviousPeriodRange(string $period): array
     {
         return match ($period) {
-            'weekly'  => [Carbon::now()->subWeek()->startOfWeek()->startOfDay(), Carbon::now()->subWeek()->endOfWeek()->endOfDay()],
-            'yearly'  => [Carbon::now()->subYear()->startOfYear()->startOfDay(), Carbon::now()->subYear()->endOfYear()->endOfDay()],
-            default   => [Carbon::now()->subMonth()->startOfMonth()->startOfDay(), Carbon::now()->subMonth()->endOfMonth()->endOfDay()],
+            'weekly' => [Carbon::now()->subWeek()->startOfWeek()->startOfDay(), Carbon::now()->subWeek()->endOfWeek()->endOfDay()],
+            'yearly' => [Carbon::now()->subYear()->startOfYear()->startOfDay(), Carbon::now()->subYear()->endOfYear()->endOfDay()],
+            default => [Carbon::now()->subMonth()->startOfMonth()->startOfDay(), Carbon::now()->subMonth()->endOfMonth()->endOfDay()],
         };
     }
 
     private function getPeriodLabel(string $period, Carbon $start, Carbon $end): string
     {
         return match ($period) {
-            'weekly'  => 'Week ' . $start->weekOfYear . ' · ' . $start->format('M d') . ' – ' . $end->format('M d, Y'),
-            'yearly'  => $start->format('Y'),
-            default   => $start->format('F Y'),
+            'weekly' => 'Week '.$start->weekOfYear.' · '.$start->format('M d').' – '.$end->format('M d, Y'),
+            'yearly' => $start->format('Y'),
+            default => $start->format('F Y'),
         };
     }
 
     private function buildChartData(Carbon $start, Carbon $end, string $period): array
     {
         $groupBy = match ($period) {
-            'yearly'  => "TO_CHAR(paid_at, 'YYYY-MM')",
-            default   => "TO_CHAR(paid_at, 'YYYY-MM-DD')",
+            'yearly' => "TO_CHAR(paid_at, 'YYYY-MM')",
+            default => "TO_CHAR(paid_at, 'YYYY-MM-DD')",
         };
 
         $rows = Payment::where('status', 'paid')
@@ -268,18 +269,18 @@ class DashboardController extends Controller
             $cursor = $start->copy()->startOfMonth();
             while ($cursor->lte($end)) {
                 $key = $cursor->format('Y-m');
-                $labels[]  = $cursor->format('M');
+                $labels[] = $cursor->format('M');
                 $amounts[] = (float) ($rows[$key]->total ?? 0);
-                $counts[]  = (int) ($rows[$key]->count ?? 0);
+                $counts[] = (int) ($rows[$key]->count ?? 0);
                 $cursor->addMonth();
             }
         } else {
             $cursor = $start->copy()->startOfDay();
             while ($cursor->lte($end)) {
                 $key = $cursor->format('Y-m-d');
-                $labels[]  = $period === 'monthly' ? $cursor->format('M d') : $cursor->format('D M d');
+                $labels[] = $period === 'monthly' ? $cursor->format('M d') : $cursor->format('D M d');
                 $amounts[] = (float) ($rows[$key]->total ?? 0);
-                $counts[]  = (int) ($rows[$key]->count ?? 0);
+                $counts[] = (int) ($rows[$key]->count ?? 0);
                 $cursor->addDay();
             }
         }
@@ -293,7 +294,7 @@ class DashboardController extends Controller
             ['label' => '3,000',    'min' => 0,     'max' => 3000],
             ['label' => '6,000',    'min' => 3001,  'max' => 6000],
             ['label' => '7k – 15k', 'min' => 6001,  'max' => 15000],
-            ['label' => '15k – 50k','min' => 15001, 'max' => 50000],
+            ['label' => '15k – 50k', 'min' => 15001, 'max' => 50000],
             ['label' => '50k+',     'min' => 50001, 'max' => PHP_INT_MAX],
         ];
 
@@ -324,34 +325,37 @@ class DashboardController extends Controller
                 ->where('is_active', true)
                 ->limit(7)
                 ->get()
-                ->map(fn($s) => [
-                    'id'          => $s->id,
-                    'dayLabel'    => Carbon::now()->startOfWeek()->addDays($s->id % 5)->format('l'),
-                    'zoneName'    => $s->zone?->name ?? 'Zone TBA',
-                    'zoneColor'   => $s->zone?->color ?? '#4caf76',
-                    'staffName'   => $s->user?->name ?? 'Unassigned',
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'dayLabel' => Carbon::now()->startOfWeek()->addDays($s->id % 5)->format('l'),
+                    'zoneName' => $s->zone?->name ?? 'Zone TBA',
+                    'zoneColor' => $s->zone?->color ?? '#4caf76',
+                    'staffName' => $s->user?->name ?? 'Unassigned',
                     'clientCount' => $s->zone ? Client::where('zone_id', $s->zone_id)->where('status', 'active')->count() : 0,
                 ])
                 ->values()
                 ->toArray();
         }
 
-        return $schedules->map(fn($s) => [
-            'id'          => $s->id,
-            'dayLabel'    => implode(', ', array_map(
-                fn($d) => Carbon::now()->startOfWeek()->addDays($d - 1)->format('l'),
-                json_decode($s->days_of_week, true) ?? []
+        return $schedules->map(fn ($s) => [
+            'id' => $s->id,
+            'dayLabel' => implode(', ', array_map(
+                fn ($d) => Carbon::now()->startOfWeek()->addDays(((int) $d) - 1)->format('l'),
+                (array) ($s->days_of_week ?? [])
             )),
-            'zoneName'    => $s->zone?->name ?? 'Zone TBA',
-            'zoneColor'   => $s->zone?->color ?? '#4caf76',
-            'staffName'   => $s->staff?->user?->name ?? 'Unassigned',
+            'zoneName' => $s->zone?->name ?? 'Zone TBA',
+            'zoneColor' => $s->zone?->color ?? '#4caf76',
+            'staffName' => $s->staff?->user?->name ?? 'Unassigned',
             'clientCount' => $s->zone ? Client::where('zone_id', $s->zone_id)->where('status', 'active')->count() : 0,
         ])->values()->toArray();
     }
 
     private function percentChange(float $prev, float $current): float
     {
-        if ($prev == 0) return $current > 0 ? 100 : 0;
+        if ($prev == 0) {
+            return $current > 0 ? 100 : 0;
+        }
+
         return round(($current - $prev) / $prev * 100, 1);
     }
 }

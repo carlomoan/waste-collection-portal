@@ -8,6 +8,7 @@ use App\Http\Controllers\BankingController;
 use App\Http\Controllers\BrowserLogController;
 use App\Http\Controllers\BulkImportController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CollectionSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DebtController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PaymentSearchController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportsController;
@@ -92,12 +94,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [ReportsController::class, 'index'])->name('index');
+        Route::get('/show', [ReportsController::class, 'show'])->name('show');
         Route::post('/generate', [ReportsController::class, 'generate'])->name('generate');
         Route::get('/monthly', [ReportsController::class, 'monthly'])->name('monthly');
         Route::get('/yearly', [ReportsController::class, 'yearly'])->name('yearly');
         Route::get('/collector', [ReportsController::class, 'collector'])->name('collector');
         Route::get('/export-pdf', [ReportsController::class, 'exportPdf'])->name('export-pdf');
         Route::get('/export-excel', [ReportsController::class, 'exportExcel'])->name('export-excel');
+        Route::get('/export-csv', [ReportsController::class, 'exportCsv'])->name('export-csv');
         Route::get('/download/{reportId}', [ReportsController::class, 'download'])->name('download');
         Route::get('/daily-collector', [ReportsController::class, 'dailyCollectorPerformance'])->name('daily-collector');
         Route::get('/daily-company', [ReportsController::class, 'dailyCompanyPerformance'])->name('daily-company');
@@ -107,6 +111,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/weekly-financial', [ReportsController::class, 'weeklyFinancialReport'])->name('weekly-financial');
         Route::get('/weekly-waste', [ReportsController::class, 'weeklyWasteCollectionReport'])->name('weekly-waste');
         Route::post('/schedule', [ReportsController::class, 'scheduleReport'])->name('schedule');
+        Route::patch('/{report}/toggle', [ReportsController::class, 'toggleSchedule'])->name('toggle');
         Route::post('/send-now/{report}', [ReportsController::class, 'sendNow'])->name('send-now');
         Route::get('/compare', [ReportsController::class, 'monthlyComparison'])->name('compare');
     });
@@ -247,6 +252,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/export', [ClientController::class, 'export'])->name('export');
         Route::get('/{client}/profile', [ClientController::class, 'profile'])->name('profile');
     });
+
+    // Collections (filter by zone / collector / month / date range)
+    Route::prefix('collections')->name('collections.')->group(function () {
+        Route::get('/', [CollectionController::class, 'index'])->name('index');
+        Route::get('/export', [CollectionController::class, 'export'])->name('export');
+        Route::get('/clients/search', [CollectionController::class, 'searchClients'])->name('clients.search');
+        Route::post('/clients/merge', [CollectionController::class, 'mergeClients'])->name('clients.merge');
+        Route::get('/payments/search', [PaymentSearchController::class, 'search'])->name('payments.search');
+        Route::post('/payments/reassign', [CollectionController::class, 'reassignPayments'])->name('payments.reassign');
+    });
+
+    // Merge & name fix page
+    Route::get('/clients-merge', fn () => Inertia::render('Clients/Merge'))->name('clients.merge-page');
 
     // Finance (includes invoices, P&L, budget)
     Route::prefix('finance')->name('finance.')->group(function () {
