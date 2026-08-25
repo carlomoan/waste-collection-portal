@@ -16,3 +16,12 @@
 2026-08-10 15:48:53.080 EAT [7] LOG:  listening on IPv4 address "127.0.0.1", port 5432
 2026-08-10 15:48:53.086 EAT [10] LOG:  database system was shut down at 2026-08-10 15:43:31 EAT
 2026-08-10 15:48:53.102 EAT [7] LOG:  database system is ready to accept connections
+2026-08-25 16:09:40.146 EAT [6] LOG:  starting PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-08-25 16:09:40.146 EAT [6] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-08-25 16:09:40.155 EAT [9] LOG:  database system was interrupted; last known up at 2026-08-10 15:48:53 EAT
+2026-08-25 16:09:40.237 EAT [9] LOG:  database system was not properly shut down; automatic recovery in progress
+2026-08-25 16:09:40.241 EAT [9] LOG:  invalid record length at 0/14F3AD0: expected at least 24, got 0
+2026-08-25 16:09:40.241 EAT [9] LOG:  redo is not required
+2026-08-25 16:09:40.249 EAT [7] LOG:  checkpoint starting: end-of-recovery immediate wait
+2026-08-25 16:09:40.270 EAT [7] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.006 s, sync=0.004 s, total=0.023 s; sync files=2, longest=0.003 s, average=0.002 s; distance=0 kB, estimate=0 kB; lsn=0/14F3AD0, redo lsn=0/14F3AD0
+2026-08-25 16:09:40.284 EAT [6] LOG:  database system is ready to accept connections

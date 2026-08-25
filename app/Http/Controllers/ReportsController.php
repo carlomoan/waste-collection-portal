@@ -129,7 +129,7 @@ class ReportsController extends Controller
         ];
 
         return match ($format) {
-            'csv' => $this->exportCsv($type, $month, $year, $filters),
+            'csv' => $this->exportCsvFromParams($type, $month, $year, $filters),
             'pdf' => $this->downloadPdf($type, $month, $year, $filters),
             default => redirect()->route('reports.show', [
                 'type' => $type, 'month' => $month, 'year' => $year,
@@ -453,6 +453,11 @@ class ReportsController extends Controller
             'staff_id' => $request->query('staff_id'),
         ];
 
+        return $this->exportCsvFromParams($type, $month, $year, $filters);
+    }
+
+    private function exportCsvFromParams(string $type, int $month, int $year, array $filters = [])
+    {
         $data = $this->buildReport($type, $month, $year, $filters);
         $period = Carbon::create($year, $month, 1)->format('F_Y');
 
@@ -710,7 +715,6 @@ class ReportsController extends Controller
             'frequency' => $validated['frequency'],
             'recipients' => $validated['recipients'],
             'is_active' => true,
-            'created_by' => auth()->id(),
         ]);
 
         return back()->with('success', 'Report scheduled.');
